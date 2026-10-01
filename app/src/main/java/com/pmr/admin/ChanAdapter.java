@@ -21,10 +21,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/* Адаптер списка абонентов V3.1.
- * Исправлено: текст кнопки БАН сбрасывается в "БАН" для не-админов.
- * Причина бага V3.0: RecyclerView переиспользует View — текст "—"
- * оставался после админа (Id=11777).
+/* Адаптер списка абонентов V3.2.
+ * Без изменений по сравнению с V3.1 — формат строки "%05d %s".
  */
 public class ChanAdapter extends RecyclerView.Adapter<ChanAdapter.VH> {
 
@@ -117,7 +115,7 @@ public class ChanAdapter extends RecyclerView.Adapter<ChanAdapter.VH> {
                     ContextCompat.getColorStateList(ctx, R.color.c_gray));
             h.btnBan.setOnClickListener(null);
         } else {
-            h.btnBan.setText("БАН");            // ← ИСПРАВЛЕНИЕ
+            h.btnBan.setText("БАН");
             h.btnBan.setEnabled(true);
             if (banned) {
                 h.btnBan.setBackgroundTintList(

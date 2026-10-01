@@ -11,20 +11,29 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V3.0.
- * Все публичные команды (sendBan, send260, sendL, sendRename, sendDelete, sendList)
- * выполняются в ОТДЕЛЬНОМ ПОТОКЕ — чтобы не было NetworkOnMainThreadException.
+/* UDP-логика PMR V3.2.
  *
- * Изменения V3.0:
- *   - логирование команд через AppLog.addCmd (→ / ←);
- *   - защита от бана администратора (Priznak_pmr);
- *   - вывод активного абонента раз в секунду в лог;
- *   - чтение локального кэша банов (bans_local) при chanList.
+ * Изменения V3.2:
+ *   - два IP-сервера: IP_SERVER и IP_SERVER2 (читаются из SharedPreferences);
+ *   - отправка пакетов на три адреса:
+ *        1) serverAddr : PORT_PRD  + kanal_PRD
+ *        2) serverAddr : 16300     + kanal_PRD
+ *        3) serverAddr2: 16300     + kanal_PRD
+ *   - Priznak_pmr, MyMailIndex, MyPChannel читаются из SharedPreferences;
+ *   - публичный sendRawPublic(byte[]) — для AudioEngine;
+ *   - публичный getKanalSecretStatic() — для AudioEngine;
+ *   - метод reloadFromPrefs(Context) — применить настройки без перезапуска;
+ *   - AudioEngine встроен в udpLoop для воспроизведения голоса.
  */
 public class PmrSocket {
 
-    public static final String IP_SERVER = "185.221.154.39";
+    /* Значения по умолчанию — используются только если SharedPreferences пусты. */
+    public static String IP_SERVER  = "185.221.154.39";
+    public static String IP_SERVER2 = "109.172.7.155";
     public static final int PORT_PRD = 16000;
+    public static final int PORT_RESERVE = 16300;
+    public static final int PORT_CMD = 15999;
+    public static final int PORT_CHECK = 16013;
 
     public static int MyMailIndex = 51953;
     public static int MyPChannel  = 5;
@@ -40,6 +49,7 @@ public class PmrSocket {
 
     private volatile DatagramSocket sock;
     private volatile InetAddress serverAddr;
+    private volatile InetAddress serverAddr2;
     private int port_prm = 5323;
     private int kanal_PRD = 0;
     private int kanal_Secret = 0;
@@ -53,8 +63,10 @@ public class PmrSocket {
     private Thread threadUdp;
     private Thread threadTimer;
 
-    /* Тик для вывода активного абонента в лог (раз в секунду). */
     private int activeLogTick = 0;
+
+    /* AudioEngine — устанавливается из PmrService после создания. */
+    private volatile AudioEngine audioEngine;
 
     public PmrSocket(Context ctx,
                      ListFile lf, ChanList cl, ActiveLog al, WebLog wl,
@@ -68,6 +80,8 @@ public class PmrSocket {
         this.filesDir = filesDir;
     }
 
+    public void setAudioEngine(AudioEngine ae) { this.audioEngine = ae; }
+
     public int getActiveClient() { return active_client_num; }
 
     public boolean isRunning() {
@@ -77,6 +91,61 @@ public class PmrSocket {
     public int getPortPrm() { return port_prm; }
     public int getKanalPRD() { return kanal_PRD; }
     public int getKanalSecret() { return kanal_Secret; }
+    public static int getKanalSecretStatic() { return 0; }
+
+    /* Публичная обёртка над sendRaw — для AudioEngine. */
+    public void sendRawPublic(byte[] buf) { sendRaw(buf); }
+
+    /* Перечитать настройки и применить без перезапуска сокета. */
+    public void reloadFromPrefs(Context ctx) {
+        SharedPreferences sp = ctx.getSharedPreferences(
+                PasswordActivity.PREFS, Context.MODE_PRIVATE);
+
+        try {
+            MyMailIndex = Integer.parseInt(sp.getString(
+                    PasswordActivity.KEY_MY_MAIL_INDEX,
+                    PasswordActivity.DEFAULT_MY_MAIL_INDEX));
+        } catch (Exception ignored) {}
+
+        try {
+            MyPChannel = Integer.parseInt(sp.getString(
+                    PasswordActivity.KEY_MY_PCHANNEL,
+                    PasswordActivity.DEFAULT_MY_PCHANNEL));
+        } catch (Exception ignored) {}
+
+        try {
+            Priznak_pmr = Integer.parseInt(sp.getString(
+                    PasswordActivity.KEY_PRIZNAK_PMR,
+                    PasswordActivity.DEFAULT_PRIZNAK_PMR));
+        } catch (Exception ignored) {}
+
+        IP_SERVER = sp.getString(PasswordActivity.KEY_IP_SERVER,
+                PasswordActivity.DEFAULT_IP_SERVER);
+        IP_SERVER2 = sp.getString(PasswordActivity.KEY_IP_SERVER2,
+                PasswordActivity.DEFAULT_IP_SERVER2);
+
+        try {
+            if (serverAddr != null) serverAddr = InetAddress.getByName(IP_SERVER);
+        } catch (Exception ignored) {}
+        try {
+            if (serverAddr2 != null) serverAddr2 = InetAddress.getByName(IP_SERVER2);
+        } catch (Exception ignored) {}
+
+        if (MyPChannel == 0) kanal_PRD = 0;
+        else kanal_PRD = ((MyMailIndex & 0xF) * 8) + MyPChannel;
+        kanal_Secret = (MyMailIndex & 0xFFFFFFF0) >> 4;
+
+        AppLog.add("PmrSocket.reload: mail=" + MyMailIndex
+                + ", ch=" + MyPChannel
+                + ", priznak=" + Priznak_pmr
+                + ", ip1=" + IP_SERVER
+                + ", ip2=" + IP_SERVER2
+                + ", kanal=" + kanal_PRD
+                + ", secret=" + kanal_Secret);
+    }
+
+    /* Публичный доступ к kanal_Secret — для AudioEngine (не static, экземплярный). */
+    public int getKanalSecretInstance() { return kanal_Secret; }
 
     public void start() {
         if (running) return;
@@ -91,11 +160,32 @@ public class PmrSocket {
         try {
             sock = new DatagramSocket(port_prm);
             sock.setSoTimeout(100);
-            serverAddr = InetAddress.getByName(IP_SERVER);
+            IP_SERVER  = sp.getString(PasswordActivity.KEY_IP_SERVER,
+                    PasswordActivity.DEFAULT_IP_SERVER);
+            IP_SERVER2 = sp.getString(PasswordActivity.KEY_IP_SERVER2,
+                    PasswordActivity.DEFAULT_IP_SERVER2);
+            serverAddr  = InetAddress.getByName(IP_SERVER);
+            serverAddr2 = InetAddress.getByName(IP_SERVER2);
         } catch (Exception e) {
             AppLog.add("PmrSocket: ошибка сокета — " + e);
             return;
         }
+
+        try {
+            MyMailIndex = Integer.parseInt(sp.getString(
+                    PasswordActivity.KEY_MY_MAIL_INDEX,
+                    PasswordActivity.DEFAULT_MY_MAIL_INDEX));
+        } catch (Exception ignored) {}
+        try {
+            MyPChannel = Integer.parseInt(sp.getString(
+                    PasswordActivity.KEY_MY_PCHANNEL,
+                    PasswordActivity.DEFAULT_MY_PCHANNEL));
+        } catch (Exception ignored) {}
+        try {
+            Priznak_pmr = Integer.parseInt(sp.getString(
+                    PasswordActivity.KEY_PRIZNAK_PMR,
+                    PasswordActivity.DEFAULT_PRIZNAK_PMR));
+        } catch (Exception ignored) {}
 
         if (MyPChannel == 0) kanal_PRD = 0;
         else kanal_PRD = ((MyMailIndex & 0xF) * 8) + MyPChannel;
@@ -104,7 +194,8 @@ public class PmrSocket {
         AppLog.add("PmrSocket: port=" + port_prm
                 + ", kanal=" + kanal_PRD
                 + ", secret=" + kanal_Secret
-                + ", server=" + IP_SERVER);
+                + ", ip1=" + IP_SERVER
+                + ", ip2=" + IP_SERVER2);
 
         running = true;
         threadUdp = new Thread(this::udpLoop, "pmr-udp");
@@ -135,7 +226,6 @@ public class PmrSocket {
                 if (active_tic > 15) { active_client_num = -1; active_tic = 0; }
             }
 
-            /* Вывод активного абонента в лог раз в секунду. */
             activeLogTick++;
             if (activeLogTick >= 10) {
                 if (active_client_num >= 0) {
@@ -147,15 +237,18 @@ public class PmrSocket {
             cikl_PRD++;
             if (cikl_PRD > 9) {
                 if (kanal_Secret != 0) sendCmdHeader(7, 0, kanal_Secret);
-                else                    sendCmdHeader(0, 0, 0);
+                else                   sendCmdHeader(0, 0, 0);
                 cikl_PRD = 0;
                 cikl++;
                 if (cikl > 3) {
+                    /* Признак рации — как в C-коде: [0][0][priznak_lo][priznak_hi][secret_lo][secret_hi] */
                     byte[] buf = new byte[6];
                     buf[0] = 0;
                     buf[1] = 0;
                     buf[2] = (byte)(Priznak_pmr & 0xFF);
                     buf[3] = (byte)((Priznak_pmr >> 8) & 0xFF);
+                    buf[4] = (byte)(kanal_Secret & 0xFF);
+                    buf[5] = (byte)((kanal_Secret >> 8) & 0xFF);
                     sendRaw(buf);
                     cikl = 0;
                 }
@@ -164,7 +257,8 @@ public class PmrSocket {
             diag++;
             if (diag > 50) {
                 AppLog.add("диаг: sock=" + (sock != null)
-                        + ", server=" + (serverAddr != null)
+                        + ", server1=" + (serverAddr != null)
+                        + ", server2=" + (serverAddr2 != null)
                         + ", running=" + running
                         + ", kanal_PRD=" + kanal_PRD);
                 diag = 0;
@@ -209,11 +303,54 @@ public class PmrSocket {
                     }
                 } else {
                     switch (command) {
-                        case 19: if (n == 324) { AppLog.addCmd("←", "cmd=19 wave client=" + client); onWave(client); } break;
-                        case 21: if (n == 644) { AppLog.addCmd("←", "cmd=21 wave client=" + client); onWave(client); } break;
-                        case 22: if (n == 324) { AppLog.addCmd("←", "cmd=22 wave client=" + client); onWave(client); } break;
-                        case 25: if (n == 324) { AppLog.addCmd("←", "cmd=25 wave client=" + client); onWave(client); } break;
-                        case 26: if (n == 164) { AppLog.addCmd("←", "cmd=26 wave client=" + client); onWave(client); } break;
+                        case 19:
+                            if (n == 324) {
+                                AppLog.addCmd("←", "cmd=19 wave client=" + client);
+                                onWave(client);
+                                if (audioEngine != null)
+                                    audioEngine.playPCM8_16k(client, buf, n);
+                            }
+                            break;
+                        case 21:
+                            if (n == 644) {
+                                AppLog.addCmd("←", "cmd=21 wave client=" + client);
+                                onWave(client);
+                                if (audioEngine != null)
+                                    audioEngine.playPCM16_16k(client, buf, n);
+                            }
+                            break;
+                        case 22:
+                            if (n == 324) {
+                                AppLog.addCmd("←", "cmd=22 wave client=" + client);
+                                onWave(client);
+                                if (audioEngine != null)
+                                    audioEngine.playG711_16k(client, buf, n);
+                            }
+                            break;
+                        case 25:
+                            if (n == 324) {
+                                AppLog.addCmd("←", "cmd=25 wave client=" + client);
+                                onWave(client);
+                                if (audioEngine != null)
+                                    audioEngine.playPCM16_8k(client, buf, n);
+                            }
+                            break;
+                        case 26:
+                            if (n == 164) {
+                                AppLog.addCmd("←", "cmd=26 wave client=" + client);
+                                onWave(client);
+                                if (audioEngine != null)
+                                    audioEngine.playG711_8k(client, buf, n);
+                            }
+                            break;
+                        case 27:
+                            if (n == 164) {
+                                AppLog.addCmd("←", "cmd=27 wave client=" + client);
+                                onWave(client);
+                                if (audioEngine != null)
+                                    audioEngine.playPCM8_8k(client, buf, n);
+                            }
+                            break;
                         case 234:
                             AppLog.addCmd("←", "cmd=234 chanList cnt="
                                     + ((n - 4) / 13) + " size=" + n);
@@ -239,7 +376,6 @@ public class PmrSocket {
     private void handleChanList(byte[] buf, int n) {
         chanList.clear();
 
-        /* Читаем локальный кэш банов. */
         SharedPreferences sp = appCtx.getSharedPreferences(
                 PasswordActivity.PREFS, Context.MODE_PRIVATE);
         Set<String> bansLocal = sp.getStringSet(
@@ -277,20 +413,31 @@ public class PmrSocket {
         }
     }
 
-    /* Низкоуровневая отправка — вызывается ТОЛЬКО из фоновых потоков */
+    /* Отправка на 3 адреса — как в C-коде (основной + 2 резерва). */
     private void sendRaw(byte[] buf) {
         DatagramSocket s = sock;
-        InetAddress a = serverAddr;
-        if (s == null || a == null) {
-            AppLog.add("sendRaw: sock или server = null");
+        InetAddress a1 = serverAddr;
+        InetAddress a2 = serverAddr2;
+        if (s == null || a1 == null) {
+            AppLog.add("sendRaw: sock или server1 = null");
             return;
         }
         try {
-            DatagramPacket p = new DatagramPacket(buf, buf.length, a,
-                    PORT_PRD + kanal_PRD);
-            s.send(p);
+            s.send(new DatagramPacket(buf, buf.length, a1, PORT_PRD + kanal_PRD));
         } catch (Exception e) {
-            AppLog.add("sendRaw FAIL: " + e);
+            AppLog.add("sendRaw (main) FAIL: " + e);
+        }
+        try {
+            s.send(new DatagramPacket(buf, buf.length, a1, PORT_RESERVE + kanal_PRD));
+        } catch (Exception e) {
+            AppLog.add("sendRaw (reserve1) FAIL: " + e);
+        }
+        if (a2 != null) {
+            try {
+                s.send(new DatagramPacket(buf, buf.length, a2, PORT_RESERVE + kanal_PRD));
+            } catch (Exception e) {
+                AppLog.add("sendRaw (reserve2) FAIL: " + e);
+            }
         }
     }
 
@@ -303,8 +450,6 @@ public class PmrSocket {
         sendRaw(buf);
     }
 
-    /* ============ ПУБЛИЧНЫЕ КОМАНДЫ — В ОТДЕЛЬНОМ ПОТОКЕ ============ */
-
     public void sendL() {
         new Thread(() -> {
             AppLog.addCmd("→", "cmd=234 list kanal=13 port="
@@ -315,13 +460,11 @@ public class PmrSocket {
 
     public void sendBan(final int client) {
         new Thread(() -> {
-            /* Защита от бана администратора. */
             if (client == Priznak_pmr) {
                 AppLog.add("бан админа запрещён (client=" + client + ")");
                 return;
             }
-            AppLog.addCmd("→", "cmd=222 ban kanal=13 client=" + client
-                    + " port=" + (PORT_PRD + kanal_PRD));
+            AppLog.addCmd("→", "cmd=222 ban kanal=13 client=" + client);
             sendCmdHeader(222, 13, client);
             sendCmdHeader(234, 13, 0);
             try { Thread.sleep(300); } catch (InterruptedException ignored) {}
@@ -331,8 +474,7 @@ public class PmrSocket {
 
     public void send260(final int v) {
         new Thread(() -> {
-            AppLog.addCmd("→", "cmd=221 26x kanal=13 value=" + v
-                    + " port=" + (PORT_PRD + kanal_PRD));
+            AppLog.addCmd("→", "cmd=221 26x kanal=13 value=" + v);
             sendCmdHeader(221, 13, v);
         }).start();
     }
@@ -355,8 +497,8 @@ public class PmrSocket {
                     AppLog.add("sendRename: sock или server = null");
                     return;
                 }
-                s.send(new DatagramPacket(buf, buf.length, a, 15999));
-                AppLog.addCmd("→", "cmd=133 rename port=15999");
+                s.send(new DatagramPacket(buf, buf.length, a, PORT_CMD));
+                AppLog.addCmd("→", "cmd=133 rename port=" + PORT_CMD);
             } catch (Exception e) {
                 AppLog.add("sendRename FAIL: " + e);
             }
@@ -374,8 +516,8 @@ public class PmrSocket {
                 h[1] = 13;
                 h[2] = (byte)(id & 0xFF);
                 h[3] = (byte)((id >> 8) & 0xFF);
-                s.send(new DatagramPacket(h, 4, a, 15999));
-                AppLog.addCmd("→", "cmd=143 delete port=15999");
+                s.send(new DatagramPacket(h, 4, a, PORT_CMD));
+                AppLog.addCmd("→", "cmd=143 delete port=" + PORT_CMD);
             } catch (Exception ignored) {}
         }).start();
     }
@@ -391,8 +533,8 @@ public class PmrSocket {
                 h[1] = 13;
                 h[2] = 0;
                 h[3] = 0;
-                s.send(new DatagramPacket(h, 4, a, 15999));
-                AppLog.addCmd("→", "cmd=123 list.txt port=15999");
+                s.send(new DatagramPacket(h, 4, a, PORT_CMD));
+                AppLog.addCmd("→", "cmd=123 list.txt port=" + PORT_CMD);
             } catch (Exception ignored) {}
         }).start();
     }

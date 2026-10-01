@@ -16,12 +16,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 
-/* Экран проверки системы V3.0.
- * Оставлены только две проверки:
- *   - Сервер PMR (доступность UDP-порта 16013 на IP сервера);
- *   - Пароль: состояние (включён/отключён в настройках).
- * Экран НЕ ГАСНЕТ, пока приложение открыто (FLAG_KEEP_SCREEN_ON).
- * Переход — только по кнопке "ПРОДОЛЖИТЬ".
+/* Экран проверки системы V3.2.
+ * Читает IP-сервер и MyMailIndex из SharedPreferences, а не из PmrSocket.
  */
 public class CheckActivity extends AppCompatActivity {
 
@@ -61,8 +57,16 @@ public class CheckActivity extends AppCompatActivity {
     }
 
     private void runChecks() {
-        final boolean serverOk = checkServer();
-        final String serverText = PmrSocket.IP_SERVER + "  "
+        SharedPreferences sp = getSharedPreferences(
+                PasswordActivity.PREFS, MODE_PRIVATE);
+
+        String ip = sp.getString(PasswordActivity.KEY_IP_SERVER,
+                PasswordActivity.DEFAULT_IP_SERVER);
+        String mail = sp.getString(PasswordActivity.KEY_MY_MAIL_INDEX,
+                PasswordActivity.DEFAULT_MY_MAIL_INDEX);
+
+        final boolean serverOk = checkServer(ip, mail);
+        final String serverText = ip + "  "
                 + (serverOk ? getString(R.string.check_available)
                             : getString(R.string.check_unavailable));
         final int serverColor = serverOk ? R.color.c_green : R.color.c_red;
@@ -77,19 +81,20 @@ public class CheckActivity extends AppCompatActivity {
         });
     }
 
-    private boolean checkServer() {
+    private boolean checkServer(String ip, String mailStr) {
         DatagramSocket s = null;
         try {
             s = new DatagramSocket();
             s.setSoTimeout(1000);
-            InetAddress addr = InetAddress.getByName(PmrSocket.IP_SERVER);
+            InetAddress addr = InetAddress.getByName(ip);
             byte[] buf = new byte[4];
             buf[0] = 7;
             buf[1] = 0;
-            int secret = ((PmrSocket.MyMailIndex & 0xFFFFFFF0) >> 4);
+            int mailIndex = Integer.parseInt(mailStr);
+            int secret = ((mailIndex & 0xFFFFFFF0) >> 4);
             buf[2] = (byte)(secret & 0xFF);
             buf[3] = (byte)((secret >> 8) & 0xFF);
-            s.send(new DatagramPacket(buf, 4, addr, 16013));
+            s.send(new DatagramPacket(buf, 4, addr, PmrSocket.PORT_CHECK));
             byte[] recv = new byte[64];
             DatagramPacket p = new DatagramPacket(recv, recv.length);
             s.receive(p);

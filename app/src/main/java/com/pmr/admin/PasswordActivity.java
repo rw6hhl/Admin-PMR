@@ -10,9 +10,9 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля V3.0.
- * Экран НЕ ГАСНЕТ, пока приложение открыто (FLAG_KEEP_SCREEN_ON).
- * Добавлены ключи и значения по умолчанию для регистрационных данных.
+/* Экран ввода пароля V3.2.
+ * Добавлены:
+ *   - KEY_IP_SERVER2 и DEFAULT_IP_SERVER2.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -24,11 +24,12 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_CHECK_SYSTEM = "check_system";
     public static final String KEY_26_STATE = "state_26";
 
-    /* Регистрационные данные V3.0. */
+    /* Регистрационные данные. */
     public static final String KEY_MY_MAIL_INDEX = "my_mail_index";
     public static final String KEY_MY_PCHANNEL   = "my_pchannel";
     public static final String KEY_PRIZNAK_PMR   = "priznak_pmr";
     public static final String KEY_IP_SERVER     = "ip_server";
+    public static final String KEY_IP_SERVER2    = "ip_server2";
     public static final String KEY_CALLSIGN      = "callsign";
     public static final String KEY_CITY          = "city";
 
@@ -41,6 +42,7 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String DEFAULT_MY_PCHANNEL   = "5";
     public static final String DEFAULT_PRIZNAK_PMR   = "11777";
     public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
+    public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
 

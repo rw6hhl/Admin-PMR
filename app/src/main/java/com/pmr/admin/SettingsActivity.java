@@ -11,9 +11,10 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран настроек V3.0.
- * Экран НЕ ГАСНЕТ, пока приложение открыто (FLAG_KEEP_SCREEN_ON).
- * Добавлен раздел "Регистрационные данные".
+/* Экран настроек V3.2.
+ * Добавлены:
+ *   - поле regIpServer2 (IP сервера 2);
+ *   - после сохранения вызывается PmrSocket.reloadFromPrefs().
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -27,11 +28,12 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btn26;
     private Button btnOpenLog;
 
-    /* Регистрационные данные V3.0. */
+    /* Регистрационные данные. */
     private EditText regMailIndex;
     private EditText regPChannel;
     private EditText regPriznak;
     private EditText regIpServer;
+    private EditText regIpServer2;
     private EditText regCallsign;
     private EditText regCity;
 
@@ -57,6 +59,7 @@ public class SettingsActivity extends AppCompatActivity {
         regPChannel  = findViewById(R.id.regPChannel);
         regPriznak   = findViewById(R.id.regPriznak);
         regIpServer  = findViewById(R.id.regIpServer);
+        regIpServer2 = findViewById(R.id.regIpServer2);
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
 
@@ -113,6 +116,10 @@ public class SettingsActivity extends AppCompatActivity {
             regIpServer.setText(sp.getString(
                     PasswordActivity.KEY_IP_SERVER,
                     PasswordActivity.DEFAULT_IP_SERVER));
+        if (regIpServer2 != null)
+            regIpServer2.setText(sp.getString(
+                    PasswordActivity.KEY_IP_SERVER2,
+                    PasswordActivity.DEFAULT_IP_SERVER2));
         if (regCallsign != null)
             regCallsign.setText(sp.getString(
                     PasswordActivity.KEY_CALLSIGN,
@@ -240,6 +247,8 @@ public class SettingsActivity extends AppCompatActivity {
                 ? regPriznak.getText().toString().trim() : "";
         String ipServer = (regIpServer != null)
                 ? regIpServer.getText().toString().trim() : "";
+        String ipServer2 = (regIpServer2 != null)
+                ? regIpServer2.getText().toString().trim() : "";
         String callsign = (regCallsign != null)
                 ? regCallsign.getText().toString().trim() : "";
         String city = (regCity != null)
@@ -253,12 +262,19 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.KEY_PRIZNAK_PMR, priznak).apply();
         if (!ipServer.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_IP_SERVER, ipServer).apply();
+        if (!ipServer2.isEmpty()) sp.edit().putString(
+                PasswordActivity.KEY_IP_SERVER2, ipServer2).apply();
         if (!callsign.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CALLSIGN, callsign).apply();
         if (!city.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CITY, city).apply();
 
-        /* Отправка rename на сервер, если позывной и город не пусты. */
+        /* Применить новые настройки к работающему PmrSocket. */
+        if (PmrService.pmrSocket != null) {
+            PmrService.pmrSocket.reloadFromPrefs(this);
+        }
+
+        /* Отправка rename на сервер. */
         if (PmrService.pmrSocket != null
                 && !priznak.isEmpty()
                 && !callsign.isEmpty()

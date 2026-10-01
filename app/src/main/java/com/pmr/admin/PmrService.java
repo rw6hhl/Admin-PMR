@@ -14,7 +14,12 @@ import androidx.core.app.NotificationCompat;
 import java.io.File;
 import java.io.InputStream;
 
-/* Foreground Service V2.4. */
+/* Foreground Service V3.2.
+ *
+ * Изменения V3.2:
+ *   - создаётся AudioEngine и связывается с PmrSocket;
+ *   - при уничтожении службы AudioEngine освобождает все AudioTrack и AudioRecord.
+ */
 public class PmrService extends Service {
 
     public static final String CHANNEL_ID = "pmr_admin_ch";
@@ -26,12 +31,13 @@ public class PmrService extends Service {
     public static WebLog webLog;
     public static CmdQueue cmdQueue;
     public static PmrSocket pmrSocket;
+    public static AudioEngine audioEngine;
 
     @Override
     public void onCreate() {
         super.onCreate();
 
-        AppLog.add("PmrService.onCreate() — старт");
+        AppLog.add("PmrService.onCreate() — старт V3.2");
 
         File dir = getFilesDir();
         File listTxt = new File(dir, "list.txt");
@@ -60,12 +66,17 @@ public class PmrService extends Service {
         pmrSocket = new PmrSocket(getApplicationContext(),
                 listFile, chanList, activeLog, webLog,
                 cmdQueue, dir);
+
+        audioEngine = new AudioEngine(getApplicationContext(), pmrSocket);
+        audioEngine.startPlaying();
+        pmrSocket.setAudioEngine(audioEngine);
+
         pmrSocket.start();
 
         createChannel();
         startForeground(NOTIF_ID, buildNotification());
 
-        AppLog.add("PmrService: служба запущена, уведомление показано");
+        AppLog.add("PmrService: служба запущена, аудио инициализировано");
     }
 
     @Override
@@ -76,6 +87,10 @@ public class PmrService extends Service {
     @Override
     public void onDestroy() {
         AppLog.add("PmrService.onDestroy()");
+        if (audioEngine != null) {
+            try { audioEngine.stopRecording(); } catch (Exception ignored) {}
+            try { audioEngine.stopPlaying(); } catch (Exception ignored) {}
+        }
         if (pmrSocket != null) pmrSocket.stop();
         super.onDestroy();
     }
