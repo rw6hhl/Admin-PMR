@@ -1,20 +1,22 @@
 package com.pmr.admin;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
 
-/* Звуковой движок Admin PMR V3.3.
+/* Звуковой движок Admin PMR V4.1.
  *
- * Изменения V3.3:
- *   - громкость воспроизведения +70%: STREAM_MUSIC + setVolume(1.7f);
- *   - отправка голоса двумя пакетами: 324 байта на основной порт,
- *     326 байт на резервные — как в C-коде с фото;
- *   - исправлена ошибка компиляции: PmrSocket.Priznak_pmr.
+ * Изменения V4.1:
+ *   - массив AudioTrack расширен с 20 до 40:
+ *       0..19  — 16 кГц
+ *       20..39 — 8 кГц
+ *   - убрано ограничение client < 10. Теперь сервер может прислать
+ *     client в диапазоне 0..19 — все воспроизводится.
+ *   - причина: сервер выдаёт client (i) из chanList как 0..N,
+ *     где N доходит до 17. Всё, что >= 10, ранее отсеивалось.
  */
 public class AudioEngine {
 
@@ -30,6 +32,10 @@ public class AudioEngine {
     private static final int BUF_ELEMENTS    = 320;
     private static final int BYTES_PER_ELEM  = 2;
 
+    /* Слотов на каждый формат: 20. Всего: 40. */
+    private static final int SLOTS_PER_FORMAT = 20;
+    private static final int OFFSET_8K = 20;
+
     /* +70% к базовой громкости. */
     private static final float VOLUME_BOOST = 1.7f;
 
@@ -37,7 +43,9 @@ public class AudioEngine {
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
 
-    private AudioTrack[] tracks = new AudioTrack[20];
+    /* 0..19  — 16 кГц (client 0..19)
+     * 20..39 — 8 кГц  (client 0..19) */
+    private AudioTrack[] tracks = new AudioTrack[40];
     private AudioRecord recorder = null;
     private Thread recorderThread = null;
     private volatile boolean isRecording = false;
@@ -62,7 +70,8 @@ public class AudioEngine {
     public void startPlaying() {
         if (isPlaying) return;
 
-        for (int i = 0; i < 10; i++) {
+        /* 16 кГц — слоты 0..19 */
+        for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
                         AudioManager.STREAM_MUSIC,
@@ -76,7 +85,8 @@ public class AudioEngine {
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
         }
-        for (int i = 10; i < 20; i++) {
+        /* 8 кГц — слоты 20..39 */
+        for (int i = OFFSET_8K; i < OFFSET_8K + SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
                         AudioManager.STREAM_MUSIC,
@@ -91,12 +101,13 @@ public class AudioEngine {
             }
         }
         isPlaying = true;
-        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST);
+        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST
+                + ", slots=" + tracks.length);
     }
 
     public void stopPlaying() {
         isPlaying = false;
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < tracks.length; i++) {
             if (tracks[i] != null) {
                 try {
                     tracks[i].flush();
@@ -109,7 +120,7 @@ public class AudioEngine {
     }
 
     public void playall() {
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < tracks.length; i++) {
             if (tracks[i] != null && tracks[i].getState() == AudioTrack.STATE_INITIALIZED) {
                 try { tracks[i].play(); } catch (Exception ignored) {}
             }
@@ -117,7 +128,7 @@ public class AudioEngine {
     }
 
     public void pauseall() {
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < tracks.length; i++) {
             if (tracks[i] != null && tracks[i].getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
                 try {
                     tracks[i].pause();
@@ -127,8 +138,19 @@ public class AudioEngine {
         }
     }
 
+    /* Проверка корректного диапазона client для 16 кГц. */
+    private boolean isValid16(int client) {
+        return client >= 0 && client < SLOTS_PER_FORMAT;
+    }
+
+    /* Проверка корректного диапазона client для 8 кГц. */
+    private boolean isValid8(int client) {
+        return client >= 0 && client < SLOTS_PER_FORMAT;
+    }
+
     public void playG711_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || client < 0 || client >= 10 || tracks[client] == null) return;
+        if (!isPlaying || !isValid16(client)) return;
+        if (tracks[client] == null) return;
         byte[] pcm = new byte[640];
         g711.decode(buf, 4, 320, pcm);
         try {
@@ -140,19 +162,22 @@ public class AudioEngine {
     }
 
     public void playG711_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || client < 0 || client >= 10 || tracks[client + 10] == null) return;
+        if (!isPlaying || !isValid8(client)) return;
+        int slot = client + OFFSET_8K;
+        if (tracks[slot] == null) return;
         byte[] pcm = new byte[320];
         g711.decode(buf, 4, 160, pcm);
         try {
-            tracks[client + 10].write(pcm, 0, 320);
-            if (tracks[client + 10].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client + 10].play();
+            tracks[slot].write(pcm, 0, 320);
+            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
+                tracks[slot].play();
             }
         } catch (Exception ignored) {}
     }
 
     public void playPCM16_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || client < 0 || client >= 10 || tracks[client] == null) return;
+        if (!isPlaying || !isValid16(client)) return;
+        if (tracks[client] == null) return;
         try {
             tracks[client].write(buf, 4, 640);
             if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -162,17 +187,20 @@ public class AudioEngine {
     }
 
     public void playPCM16_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || client < 0 || client >= 10 || tracks[client + 10] == null) return;
+        if (!isPlaying || !isValid8(client)) return;
+        int slot = client + OFFSET_8K;
+        if (tracks[slot] == null) return;
         try {
-            tracks[client + 10].write(buf, 4, 320);
-            if (tracks[client + 10].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client + 10].play();
+            tracks[slot].write(buf, 4, 320);
+            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
+                tracks[slot].play();
             }
         } catch (Exception ignored) {}
     }
 
     public void playPCM8_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || client < 0 || client >= 10 || tracks[client] == null) return;
+        if (!isPlaying || !isValid16(client)) return;
+        if (tracks[client] == null) return;
         short[] pcm = new short[320];
         for (int i = 4; i < 324; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
@@ -187,16 +215,18 @@ public class AudioEngine {
     }
 
     public void playPCM8_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || client < 0 || client >= 10 || tracks[client + 10] == null) return;
+        if (!isPlaying || !isValid8(client)) return;
+        int slot = client + OFFSET_8K;
+        if (tracks[slot] == null) return;
         short[] pcm = new short[160];
         for (int i = 4; i < 164; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
         }
         byte[] out = short2byte(pcm);
         try {
-            tracks[client + 10].write(out, 0, 320);
-            if (tracks[client + 10].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client + 10].play();
+            tracks[slot].write(out, 0, 320);
+            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
+                tracks[slot].play();
             }
         } catch (Exception ignored) {}
     }
