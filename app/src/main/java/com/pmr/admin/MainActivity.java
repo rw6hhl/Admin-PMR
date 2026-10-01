@@ -10,10 +10,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
-import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,15 +24,13 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 
-/* Главный экран V3.2.
+/* Главный экран V3.3.
  *
- * Добавлено:
- *   - кнопка PTT (push-to-talk) — при нажатии startRecording, при отпускании stopRecording;
- *   - индикаторы TX/RX;
- *   - кнопка «ЗАГРУЗИТЬ list.txt» — выбор файла через системный диалог.
+ * Изменения V3.3:
+ *   - убраны индикаторы TX/RX (квадратики);
+ *   - кнопка PTT меняет цвет: синяя → красная при передаче.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -47,11 +43,8 @@ public class MainActivity extends AppCompatActivity {
     private int refreshMs = 2000;
 
     private Button btnPtt;
-    private ImageView imgTx;
-    private ImageView imgRx;
     private Button btnLoadList;
 
-    /* Launcher для выбора list.txt через системный файловый менеджер. */
     private ActivityResultLauncher<String[]> filePicker;
 
     @Override
@@ -63,9 +56,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         TextView title = findViewById(R.id.listTitle);
-        if (title != null) {
-            title.setText(R.string.list_title);
-        }
+        if (title != null) title.setText(R.string.list_title);
 
         recycler = findViewById(R.id.recyclerChan);
         recycler.setLayoutManager(new LinearLayoutManager(this));
@@ -80,13 +71,8 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        btnPtt     = findViewById(R.id.btnPtt);
-        imgTx      = findViewById(R.id.imgTx);
-        imgRx      = findViewById(R.id.imgRx);
+        btnPtt      = findViewById(R.id.btnPtt);
         btnLoadList = findViewById(R.id.btnLoadList);
-
-        if (imgTx != null) imgTx.setAlpha(0.2f);
-        if (imgRx != null) imgRx.setAlpha(0.2f);
 
         if (btnPtt != null) {
             btnPtt.setOnTouchListener((v, event) -> {
@@ -95,25 +81,22 @@ public class MainActivity extends AppCompatActivity {
                     if (PmrService.audioEngine != null) {
                         PmrService.audioEngine.startRecording();
                     }
-                    if (imgTx != null) imgTx.setAlpha(1.0f);
-                    if (PmrService.audioEngine != null && !PmrService.audioEngine.isDuplex()) {
-                        PmrService.audioEngine.pauseall();
-                    }
+                    btnPtt.setBackgroundTintList(
+                            ContextCompat.getColorStateList(
+                                    MainActivity.this, R.color.c_red));
                 } else if (action == MotionEvent.ACTION_UP
                         || action == MotionEvent.ACTION_CANCEL) {
                     if (PmrService.audioEngine != null) {
                         PmrService.audioEngine.stopRecording();
                     }
-                    if (imgTx != null) imgTx.setAlpha(0.2f);
-                    if (PmrService.audioEngine != null && !PmrService.audioEngine.isDuplex()) {
-                        PmrService.audioEngine.playall();
-                    }
+                    btnPtt.setBackgroundTintList(
+                            ContextCompat.getColorStateList(
+                                    MainActivity.this, R.color.c_blue));
                 }
                 return true;
             });
         }
 
-        /* Регистрация file picker для list.txt. */
         filePicker = registerForActivityResult(
                 new ActivityResultContracts.OpenDocument(),
                 uri -> {
@@ -121,9 +104,8 @@ public class MainActivity extends AppCompatActivity {
                 });
 
         if (btnLoadList != null) {
-            btnLoadList.setOnClickListener(v -> {
-                filePicker.launch(new String[]{"text/plain", "*/*"});
-            });
+            btnLoadList.setOnClickListener(v ->
+                    filePicker.launch(new String[]{"text/plain", "*/*"}));
         }
 
         handler = new Handler(Looper.getMainLooper());
@@ -162,18 +144,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshUI() {
         if (PmrService.pmrSocket == null) return;
-
         java.util.List<ChanList.Item> lst = PmrService.chanList.snapshot();
         int activeClient = PmrService.pmrSocket.getActiveClient();
         adapter.setData(lst, activeClient, PmrService.listFile);
-
-        /* Индикатор RX: подсвечен, если есть активный клиент. */
-        if (imgRx != null) {
-            imgRx.setAlpha(activeClient >= 0 ? 1.0f : 0.2f);
-        }
     }
 
-    /* Применить выбранный list.txt. */
     private void applyListFile(Uri uri) {
         try {
             InputStream is = getContentResolver().openInputStream(uri);
@@ -188,7 +163,6 @@ public class MainActivity extends AppCompatActivity {
             File dest = new File(getFilesDir(), "list.txt");
             PmrService.listFile.save(dest);
 
-            /* Сбросить список абонентов в канале и перезапросить с сервера. */
             if (PmrService.chanList != null) PmrService.chanList.clear();
             if (PmrService.pmrSocket != null) PmrService.pmrSocket.sendList();
 

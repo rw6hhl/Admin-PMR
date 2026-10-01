@@ -11,23 +11,16 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V3.2.
+/* UDP-логика PMR V3.3.
  *
- * Изменения V3.2:
- *   - два IP-сервера: IP_SERVER и IP_SERVER2 (читаются из SharedPreferences);
- *   - отправка пакетов на три адреса:
- *        1) serverAddr : PORT_PRD  + kanal_PRD
- *        2) serverAddr : 16300     + kanal_PRD
- *        3) serverAddr2: 16300     + kanal_PRD
- *   - Priznak_pmr, MyMailIndex, MyPChannel читаются из SharedPreferences;
- *   - публичный sendRawPublic(byte[]) — для AudioEngine;
- *   - публичный getKanalSecretStatic() — для AudioEngine;
- *   - метод reloadFromPrefs(Context) — применить настройки без перезапуска;
- *   - AudioEngine встроен в udpLoop для воспроизведения голоса.
+ * Изменения V3.3:
+ *   - публичный метод sendVoice(mainPacket, reservePacket):
+ *     mainPacket (324 байта) → PORT_PRD + kanal;
+ *     reservePacket (326 байт) → 16300 + kanal на обоих серверах.
+ *   - всё остальное как в V3.2.
  */
 public class PmrSocket {
 
-    /* Значения по умолчанию — используются только если SharedPreferences пусты. */
     public static String IP_SERVER  = "185.221.154.39";
     public static String IP_SERVER2 = "109.172.7.155";
     public static final int PORT_PRD = 16000;
@@ -62,10 +55,8 @@ public class PmrSocket {
     private volatile boolean running = false;
     private Thread threadUdp;
     private Thread threadTimer;
-
     private int activeLogTick = 0;
 
-    /* AudioEngine — устанавливается из PmrService после создания. */
     private volatile AudioEngine audioEngine;
 
     public PmrSocket(Context ctx,
@@ -81,82 +72,92 @@ public class PmrSocket {
     }
 
     public void setAudioEngine(AudioEngine ae) { this.audioEngine = ae; }
-
     public int getActiveClient() { return active_client_num; }
-
-    public boolean isRunning() {
-        return running && sock != null && serverAddr != null;
-    }
-
+    public boolean isRunning() { return running && sock != null && serverAddr != null; }
     public int getPortPrm() { return port_prm; }
     public int getKanalPRD() { return kanal_PRD; }
     public int getKanalSecret() { return kanal_Secret; }
+    public int getKanalSecretInstance() { return kanal_Secret; }
     public static int getKanalSecretStatic() { return 0; }
-
-    /* Публичная обёртка над sendRaw — для AudioEngine. */
     public void sendRawPublic(byte[] buf) { sendRaw(buf); }
 
-    /* Перечитать настройки и применить без перезапуска сокета. */
+    /* Отправка голоса: main → PORT_PRD, reserve → 16300 на оба сервера. */
+    public void sendVoice(byte[] mainPacket, byte[] reservePacket) {
+        DatagramSocket s = sock;
+        InetAddress a1 = serverAddr;
+        InetAddress a2 = serverAddr2;
+        if (s == null || a1 == null) return;
+
+        if (mainPacket != null) {
+            try {
+                s.send(new DatagramPacket(mainPacket, mainPacket.length,
+                        a1, PORT_PRD + kanal_PRD));
+            } catch (Exception e) {
+                AppLog.add("sendVoice main FAIL: " + e);
+            }
+        }
+        if (reservePacket != null) {
+            try {
+                s.send(new DatagramPacket(reservePacket, reservePacket.length,
+                        a1, PORT_RESERVE + kanal_PRD));
+            } catch (Exception e) {
+                AppLog.add("sendVoice res1 FAIL: " + e);
+            }
+            if (a2 != null) {
+                try {
+                    s.send(new DatagramPacket(reservePacket, reservePacket.length,
+                            a2, PORT_RESERVE + kanal_PRD));
+                } catch (Exception e) {
+                    AppLog.add("sendVoice res2 FAIL: " + e);
+                }
+            }
+        }
+    }
+
     public void reloadFromPrefs(Context ctx) {
         SharedPreferences sp = ctx.getSharedPreferences(
                 PasswordActivity.PREFS, Context.MODE_PRIVATE);
-
         try {
             MyMailIndex = Integer.parseInt(sp.getString(
                     PasswordActivity.KEY_MY_MAIL_INDEX,
                     PasswordActivity.DEFAULT_MY_MAIL_INDEX));
         } catch (Exception ignored) {}
-
         try {
             MyPChannel = Integer.parseInt(sp.getString(
                     PasswordActivity.KEY_MY_PCHANNEL,
                     PasswordActivity.DEFAULT_MY_PCHANNEL));
         } catch (Exception ignored) {}
-
         try {
             Priznak_pmr = Integer.parseInt(sp.getString(
                     PasswordActivity.KEY_PRIZNAK_PMR,
                     PasswordActivity.DEFAULT_PRIZNAK_PMR));
         } catch (Exception ignored) {}
-
         IP_SERVER = sp.getString(PasswordActivity.KEY_IP_SERVER,
                 PasswordActivity.DEFAULT_IP_SERVER);
         IP_SERVER2 = sp.getString(PasswordActivity.KEY_IP_SERVER2,
                 PasswordActivity.DEFAULT_IP_SERVER2);
-
         try {
             if (serverAddr != null) serverAddr = InetAddress.getByName(IP_SERVER);
         } catch (Exception ignored) {}
         try {
             if (serverAddr2 != null) serverAddr2 = InetAddress.getByName(IP_SERVER2);
         } catch (Exception ignored) {}
-
         if (MyPChannel == 0) kanal_PRD = 0;
         else kanal_PRD = ((MyMailIndex & 0xF) * 8) + MyPChannel;
         kanal_Secret = (MyMailIndex & 0xFFFFFFF0) >> 4;
-
         AppLog.add("PmrSocket.reload: mail=" + MyMailIndex
-                + ", ch=" + MyPChannel
-                + ", priznak=" + Priznak_pmr
-                + ", ip1=" + IP_SERVER
-                + ", ip2=" + IP_SERVER2
-                + ", kanal=" + kanal_PRD
-                + ", secret=" + kanal_Secret);
+                + ", ch=" + MyPChannel + ", priznak=" + Priznak_pmr
+                + ", ip1=" + IP_SERVER + ", ip2=" + IP_SERVER2
+                + ", kanal=" + kanal_PRD + ", secret=" + kanal_Secret);
     }
-
-    /* Публичный доступ к kanal_Secret — для AudioEngine (не static, экземплярный). */
-    public int getKanalSecretInstance() { return kanal_Secret; }
 
     public void start() {
         if (running) return;
-
         SharedPreferences sp = appCtx.getSharedPreferences(
                 PasswordActivity.PREFS, Context.MODE_PRIVATE);
         port_prm = sp.getInt(PasswordActivity.KEY_PORT_PRM,
                 PasswordActivity.DEFAULT_PORT_PRM);
-
         AppLog.add("PmrSocket.start() — начало");
-
         try {
             sock = new DatagramSocket(port_prm);
             sock.setSoTimeout(100);
@@ -170,7 +171,6 @@ public class PmrSocket {
             AppLog.add("PmrSocket: ошибка сокета — " + e);
             return;
         }
-
         try {
             MyMailIndex = Integer.parseInt(sp.getString(
                     PasswordActivity.KEY_MY_MAIL_INDEX,
@@ -186,17 +186,11 @@ public class PmrSocket {
                     PasswordActivity.KEY_PRIZNAK_PMR,
                     PasswordActivity.DEFAULT_PRIZNAK_PMR));
         } catch (Exception ignored) {}
-
         if (MyPChannel == 0) kanal_PRD = 0;
         else kanal_PRD = ((MyMailIndex & 0xF) * 8) + MyPChannel;
         kanal_Secret = (MyMailIndex & 0xFFFFFFF0) >> 4;
-
-        AppLog.add("PmrSocket: port=" + port_prm
-                + ", kanal=" + kanal_PRD
-                + ", secret=" + kanal_Secret
-                + ", ip1=" + IP_SERVER
-                + ", ip2=" + IP_SERVER2);
-
+        AppLog.add("PmrSocket: port=" + port_prm + ", kanal=" + kanal_PRD
+                + ", secret=" + kanal_Secret + ", ip1=" + IP_SERVER + ", ip2=" + IP_SERVER2);
         running = true;
         threadUdp = new Thread(this::udpLoop, "pmr-udp");
         threadUdp.start();
@@ -214,18 +208,15 @@ public class PmrSocket {
         int cikl_PRD = 0;
         int cikl = 0;
         int diag = 0;
-
         while (running) {
             if (KtoTic > 0) {
                 KtoTic++;
                 if (KtoTic > 10) { KtoActiv = -1; KtoTic = 0; }
             }
-
             if (active_client_num >= 0) {
                 active_tic++;
                 if (active_tic > 15) { active_client_num = -1; active_tic = 0; }
             }
-
             activeLogTick++;
             if (activeLogTick >= 10) {
                 if (active_client_num >= 0) {
@@ -233,7 +224,6 @@ public class PmrSocket {
                 }
                 activeLogTick = 0;
             }
-
             cikl_PRD++;
             if (cikl_PRD > 9) {
                 if (kanal_Secret != 0) sendCmdHeader(7, 0, kanal_Secret);
@@ -241,7 +231,6 @@ public class PmrSocket {
                 cikl_PRD = 0;
                 cikl++;
                 if (cikl > 3) {
-                    /* Признак рации — как в C-коде: [0][0][priznak_lo][priznak_hi][secret_lo][secret_hi] */
                     byte[] buf = new byte[6];
                     buf[0] = 0;
                     buf[1] = 0;
@@ -253,17 +242,14 @@ public class PmrSocket {
                     cikl = 0;
                 }
             }
-
             diag++;
             if (diag > 50) {
                 AppLog.add("диаг: sock=" + (sock != null)
                         + ", server1=" + (serverAddr != null)
                         + ", server2=" + (serverAddr2 != null)
-                        + ", running=" + running
-                        + ", kanal_PRD=" + kanal_PRD);
+                        + ", running=" + running + ", kanal_PRD=" + kanal_PRD);
                 diag = 0;
             }
-
             try { Thread.sleep(100); } catch (InterruptedException ignored) {}
         }
     }
@@ -271,7 +257,6 @@ public class PmrSocket {
     private void udpLoop() {
         int KolInKanal = 0;
         byte[] buf = new byte[1640];
-
         while (running) {
             try {
                 DatagramSocket s = sock;
@@ -280,13 +265,10 @@ public class PmrSocket {
                 s.receive(p);
                 int n = p.getLength();
                 if (n < 4) continue;
-
                 int command = buf[0] & 0xFF;
                 int kanal   = buf[1] & 0xFF;
                 int client  = ((buf[3] & 0xFF) << 8) | (buf[2] & 0xFF);
-
                 if (kanal != kanal_PRD && kanal_PRD != 0) continue;
-
                 if (n == 4) {
                     switch (command) {
                         case 0:
@@ -375,12 +357,10 @@ public class PmrSocket {
 
     private void handleChanList(byte[] buf, int n) {
         chanList.clear();
-
         SharedPreferences sp = appCtx.getSharedPreferences(
                 PasswordActivity.PREFS, Context.MODE_PRIVATE);
         Set<String> bansLocal = sp.getStringSet(
                 ChanAdapter.KEY_BANS_LOCAL, new HashSet<String>());
-
         int cnt = (n - 4) / 13;
         if (cnt > 102) cnt = 102;
         for (int k = 0; k < cnt; k++) {
@@ -413,7 +393,6 @@ public class PmrSocket {
         }
     }
 
-    /* Отправка на 3 адреса — как в C-коде (основной + 2 резерва). */
     private void sendRaw(byte[] buf) {
         DatagramSocket s = sock;
         InetAddress a1 = serverAddr;

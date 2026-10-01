@@ -1,41 +1,37 @@
 package com.pmr.admin;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
 
-/* Звуковой движок Admin PMR V3.2.
+/* Звуковой движок Admin PMR V3.3.
  *
- * Задачи:
- *   - воспроизведение входящих голосовых пакетов (G711 и PCM);
- *   - запись микрофона и отправка голоса через PmrSocket.sendRaw().
- *
- * Архитектура:
- *   - AudioTrack[20]:  индексы 0..9  — частота 16000 Гц,
- *                      индексы 10..19 — частота 8000 Гц.
- *   - AudioRecord:    один, для режима PTT.
- *   - Кодек G711Ua:   для µ-law encode/decode.
- *
- * Потоки:
- *   - поток записи (recorderThread) читает PCM с микрофона
- *     и отправляет пакеты через PmrSocket.
+ * Изменения V3.3:
+ *   - громкость воспроизведения +70%: STREAM_MUSIC + setVolume(1.7f);
+ *   - отправка голоса двумя пакетами: 324 байта на основной порт,
+ *     326 байт на резервные — как в C-коде с фото;
+ *   - устранена ошибка с int secret из PmrSocket.
  */
 public class AudioEngine {
 
-    /* Коды команд — совпадают с протоколом рации. */
-    public static final int CMD_PCM8_16K  = 19;   // PCM  8 бит 16 кГц,  324 байта
-    public static final int CMD_PCM16_16K = 21;   // PCM 16 бит 16 кГц,  644 байта
-    public static final int CMD_G711_16K  = 22;   // G711    16 кГц,     324 байта
-    public static final int CMD_PCM16_8K  = 25;   // PCM 16 бит 8 кГц,   324 байта
-    public static final int CMD_G711_8K   = 26;   // G711    8 кГц,      164 байта
+    public static final int CMD_PCM8_16K  = 19;
+    public static final int CMD_PCM16_16K = 21;
+    public static final int CMD_G711_16K  = 22;
+    public static final int CMD_PCM16_8K  = 25;
+    public static final int CMD_G711_8K   = 26;
+    public static final int CMD_PCM8_8K   = 27;
 
     private static final int SAMPLE_RATE_16K = 16000;
     private static final int SAMPLE_RATE_8K  = 8000;
-    private static final int BUF_ELEMENTS    = 320;   // 20 мс @ 16 кГц
-    private static final int BYTES_PER_ELEM  = 2;     // 16 бит PCM
+    private static final int BUF_ELEMENTS    = 320;
+    private static final int BYTES_PER_ELEM  = 2;
+
+    /* +70% к базовой громкости. */
+    private static final float VOLUME_BOOST = 1.7f;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -47,8 +43,7 @@ public class AudioEngine {
     private volatile boolean isRecording = false;
     private volatile boolean isPlaying = false;
 
-    /* Режим передачи (0..6). По умолчанию 22 — G711 16 кГц. */
-    private volatile int rej = 22;
+    private volatile int rej = CMD_G711_16K;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
@@ -57,11 +52,12 @@ public class AudioEngine {
 
     public void setRej(int r) { this.rej = r; }
     public int  getRej()      { return rej; }
-
     public boolean isRecording() { return isRecording; }
     public boolean isPlaying()   { return isPlaying; }
 
-    /* ============================ ВОСПРОИЗВЕДЕНИЕ ============================ */
+    public boolean isDuplex() { return true; }
+
+    /* ====================== ВОСПРОИЗВЕДЕНИЕ ====================== */
 
     public void startPlaying() {
         if (isPlaying) return;
@@ -69,7 +65,7 @@ public class AudioEngine {
         for (int i = 0; i < 10; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
-                        AudioManager.STREAM_VOICE_CALL,
+                        AudioManager.STREAM_MUSIC,
                         SAMPLE_RATE_16K,
                         AudioFormat.CHANNEL_OUT_MONO,
                         AudioFormat.ENCODING_PCM_16BIT,
@@ -77,12 +73,13 @@ public class AudioEngine {
                                 AudioFormat.CHANNEL_OUT_MONO,
                                 AudioFormat.ENCODING_PCM_16BIT),
                         AudioTrack.MODE_STREAM);
+                try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
         }
         for (int i = 10; i < 20; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
-                        AudioManager.STREAM_VOICE_CALL,
+                        AudioManager.STREAM_MUSIC,
                         SAMPLE_RATE_8K,
                         AudioFormat.CHANNEL_OUT_MONO,
                         AudioFormat.ENCODING_PCM_16BIT,
@@ -90,9 +87,11 @@ public class AudioEngine {
                                 AudioFormat.CHANNEL_OUT_MONO,
                                 AudioFormat.ENCODING_PCM_16BIT),
                         AudioTrack.MODE_STREAM);
+                try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
         }
         isPlaying = true;
+        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST);
     }
 
     public void stopPlaying() {
@@ -128,10 +127,8 @@ public class AudioEngine {
         }
     }
 
-    /* G711 16 кГц — вызывается из PmrSocket.udpLoop() при command=22.
-     * buf: 4 байта заголовка + 320 байт µ-law. */
     public void playG711_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || tracks[client] == null) return;
+        if (!isPlaying || client < 0 || client >= 10 || tracks[client] == null) return;
         byte[] pcm = new byte[640];
         g711.decode(buf, 4, 320, pcm);
         try {
@@ -142,10 +139,8 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
-    /* G711 8 кГц — command=26.
-     * buf: 4 байта заголовка + 160 байт µ-law. */
     public void playG711_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || tracks[client + 10] == null) return;
+        if (!isPlaying || client < 0 || client >= 10 || tracks[client + 10] == null) return;
         byte[] pcm = new byte[320];
         g711.decode(buf, 4, 160, pcm);
         try {
@@ -156,10 +151,8 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
-    /* PCM 16 бит 16 кГц — command=21.
-     * buf: 4 байта заголовка + 640 байт PCM. */
     public void playPCM16_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || tracks[client] == null) return;
+        if (!isPlaying || client < 0 || client >= 10 || tracks[client] == null) return;
         try {
             tracks[client].write(buf, 4, 640);
             if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -168,10 +161,8 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
-    /* PCM 16 бит 8 кГц — command=25.
-     * buf: 4 байта заголовка + 320 байт PCM. */
     public void playPCM16_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || tracks[client + 10] == null) return;
+        if (!isPlaying || client < 0 || client >= 10 || tracks[client + 10] == null) return;
         try {
             tracks[client + 10].write(buf, 4, 320);
             if (tracks[client + 10].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -180,10 +171,8 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
-    /* PCM 8 бит 16 кГц — command=19.
-     * buf: 4 байта заголовка + 320 байт PCM (8 бит). */
     public void playPCM8_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || tracks[client] == null) return;
+        if (!isPlaying || client < 0 || client >= 10 || tracks[client] == null) return;
         short[] pcm = new short[320];
         for (int i = 4; i < 324; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
@@ -197,10 +186,8 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
-    /* PCM 8 бит 8 кГц — command=27.
-     * buf: 4 байта заголовка + 160 байт PCM (8 бит). */
     public void playPCM8_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || tracks[client + 10] == null) return;
+        if (!isPlaying || client < 0 || client >= 10 || tracks[client + 10] == null) return;
         short[] pcm = new short[160];
         for (int i = 4; i < 164; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
@@ -214,7 +201,7 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
-    /* ============================== ЗАПИСЬ =============================== */
+    /* ========================== ЗАПИСЬ ========================== */
 
     public void startRecording() {
         if (isRecording) return;
@@ -239,8 +226,7 @@ public class AudioEngine {
             recorder.startRecording();
             isRecording = true;
 
-            final int rate = sampleRate;
-            recorderThread = new Thread(() -> recordLoop(rate), "pmr-rec");
+            recorderThread = new Thread(() -> recordLoop(sampleRate), "pmr-rec");
             recorderThread.start();
 
             AppLog.add("AudioEngine: запись стартовала, rate=" + sampleRate
@@ -266,7 +252,6 @@ public class AudioEngine {
     private void recordLoop(int sampleRate) {
         byte[] pcm16 = new byte[BUF_ELEMENTS * BYTES_PER_ELEM];
         byte[] g711buf = new byte[BUF_ELEMENTS];
-        byte[] packet = new byte[4 + BUF_ELEMENTS + 2]; // заголовок + данные + secret
 
         while (isRecording) {
             int read;
@@ -284,7 +269,7 @@ public class AudioEngine {
             if (rej == CMD_G711_16K) {
                 cmd = CMD_G711_16K;
                 g711.encode(pcm16, 0, read, g711buf);
-                payloadLen = read / 2;    // µ-law: 1 байт на 1 sample
+                payloadLen = read / 2;
                 payload = new byte[payloadLen];
                 System.arraycopy(g711buf, 0, payload, 0, payloadLen);
             } else if (rej == CMD_PCM16_16K) {
@@ -315,24 +300,35 @@ public class AudioEngine {
                 continue;
             }
 
-            /* Собираем пакет: [cmd][kanal][client_lo][client_hi][secret_lo][secret_hi][данные] */
+            /* Собираем пакет 326 байт:
+             * [cmd][kanal=0][client_lo][client_hi][secret_lo][secret_hi][payload...] */
+            int secret = (pmrSocket != null) ? pmrSocket.getKanalSecretInstance() : 0;
+            byte[] packet = new byte[6 + payloadLen];
             packet[0] = (byte) cmd;
             packet[1] = 0;
             packet[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
             packet[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-            int secret = (pmrSocket != null) ? pmrSocket.getKanalSecretInstance() : 0;
             packet[4] = (byte) (secret & 0xFF);
             packet[5] = (byte) ((secret >> 8) & 0xFF);
             System.arraycopy(payload, 0, packet, 6, payloadLen);
 
-            byte[] sendBuf = new byte[6 + payloadLen];
-            System.arraycopy(packet, 0, sendBuf, 0, 6 + payloadLen);
+            /* Основной пакет 324 байта = 4 + payload (без secret).
+             * Резервный 326 байт = 6 + payload (с secret).
+             * Как в C-коде с фото: основной идёт на PORT_PRD, резерв — на 16300. */
+            byte[] mainPacket = new byte[4 + payloadLen];
+            mainPacket[0] = (byte) cmd;
+            mainPacket[1] = 0;
+            mainPacket[2] = (byte) (Priznak_pmr & 0xFF);
+            mainPacket[3] = (byte) ((Priznak_pmr >> 8) & 0xFF);
+            System.arraycopy(payload, 0, mainPacket, 4, payloadLen);
 
-            pmrSocket.sendRawPublic(sendBuf);
+            if (pmrSocket != null) {
+                pmrSocket.sendVoice(mainPacket, packet);
+            }
         }
     }
 
-    /* ============================ УТИЛИТЫ ================================ */
+    /* ========================== УТИЛИТЫ ========================== */
 
     private static byte[] short2byte(short[] sArr) {
         int length = sArr.length;
@@ -352,6 +348,4 @@ public class AudioEngine {
         }
         return s;
     }
-
-    public boolean isDuplex() { return true; }
 }
