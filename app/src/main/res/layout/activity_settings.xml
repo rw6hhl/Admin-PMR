@@ -305,13 +305,26 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:layout_marginBottom="16dp"
             android:text="@string/settings_log_open"
             android:backgroundTint="@color/c_blue"
             android:textColor="@color/c_white"
             android:textSize="16sp"
             android:paddingTop="14dp"
             android:paddingBottom="14dp" />
+
+        <!-- V4.0: кнопка загрузки list.txt переехала сюда -->
+        <Button
+            android:id="@+id/btnLoadList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="16dp"
+            android:text="@string/btn_load_list"
+            android:textSize="16sp"
+            android:textColor="@color/c_white"
+            android:backgroundTint="@color/c_green"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp" />
 
     </LinearLayout>
 </ScrollView>

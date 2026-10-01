@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,24 +12,18 @@ import android.view.MotionEvent;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.io.File;
-import java.io.InputStream;
-
-/* Главный экран V3.3.
+/* Главный экран V4.0.
  *
- * Изменения V3.3:
- *   - убраны индикаторы TX/RX (квадратики);
- *   - кнопка PTT меняет цвет: синяя → красная при передаче.
+ * Изменения V4.0:
+ *   - кнопка «ЗАГРУЗИТЬ list.txt» перенесена в «НАСТРОЙКИ»;
+ *   - весь код загрузки list.txt удалён (переехал в SettingsActivity).
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -43,9 +36,6 @@ public class MainActivity extends AppCompatActivity {
     private int refreshMs = 2000;
 
     private Button btnPtt;
-    private Button btnLoadList;
-
-    private ActivityResultLauncher<String[]> filePicker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,8 +61,7 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        btnPtt      = findViewById(R.id.btnPtt);
-        btnLoadList = findViewById(R.id.btnLoadList);
+        btnPtt = findViewById(R.id.btnPtt);
 
         if (btnPtt != null) {
             btnPtt.setOnTouchListener((v, event) -> {
@@ -95,17 +84,6 @@ public class MainActivity extends AppCompatActivity {
                 }
                 return true;
             });
-        }
-
-        filePicker = registerForActivityResult(
-                new ActivityResultContracts.OpenDocument(),
-                uri -> {
-                    if (uri != null) applyListFile(uri);
-                });
-
-        if (btnLoadList != null) {
-            btnLoadList.setOnClickListener(v ->
-                    filePicker.launch(new String[]{"text/plain", "*/*"}));
         }
 
         handler = new Handler(Looper.getMainLooper());
@@ -147,33 +125,6 @@ public class MainActivity extends AppCompatActivity {
         java.util.List<ChanList.Item> lst = PmrService.chanList.snapshot();
         int activeClient = PmrService.pmrSocket.getActiveClient();
         adapter.setData(lst, activeClient, PmrService.listFile);
-    }
-
-    private void applyListFile(Uri uri) {
-        try {
-            InputStream is = getContentResolver().openInputStream(uri);
-            if (is == null) {
-                Toast.makeText(this, R.string.toast_list_error,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            int n = PmrService.listFile.loadFromStream(is);
-            is.close();
-
-            File dest = new File(getFilesDir(), "list.txt");
-            PmrService.listFile.save(dest);
-
-            if (PmrService.chanList != null) PmrService.chanList.clear();
-            if (PmrService.pmrSocket != null) PmrService.pmrSocket.sendList();
-
-            Toast.makeText(this,
-                    getString(R.string.toast_list_loaded, n),
-                    Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            AppLog.add("applyListFile error: " + e);
-            Toast.makeText(this, R.string.toast_list_error,
-                    Toast.LENGTH_SHORT).show();
-        }
     }
 
     private void requestMicPermission() {

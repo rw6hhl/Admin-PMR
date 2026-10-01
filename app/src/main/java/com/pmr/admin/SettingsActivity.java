@@ -2,6 +2,7 @@ package com.pmr.admin;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -9,12 +10,19 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран настроек V3.2.
- * Добавлены:
- *   - поле regIpServer2 (IP сервера 2);
- *   - после сохранения вызывается PmrSocket.reloadFromPrefs().
+import java.io.File;
+import java.io.InputStream;
+
+/* Экран настроек V4.0.
+ *
+ * Изменения V4.0:
+ *   - кнопка «ЗАГРУЗИТЬ list.txt» переехала сюда из MainActivity;
+ *   - добавлен ActivityResultLauncher для выбора файла list.txt;
+ *   - метод applyListFile(Uri) — как в V3.3, но здесь.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -27,8 +35,8 @@ public class SettingsActivity extends AppCompatActivity {
     private CheckBox checkSystemBox;
     private Button btn26;
     private Button btnOpenLog;
+    private Button btnLoadList;
 
-    /* Регистрационные данные. */
     private EditText regMailIndex;
     private EditText regPChannel;
     private EditText regPriznak;
@@ -36,6 +44,9 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regIpServer2;
     private EditText regCallsign;
     private EditText regCity;
+
+    /* File picker для list.txt. */
+    private ActivityResultLauncher<String[]> filePicker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +65,7 @@ public class SettingsActivity extends AppCompatActivity {
         checkSystemBox = findViewById(R.id.checkSystemBox);
         btn26 = findViewById(R.id.btn26);
         btnOpenLog = findViewById(R.id.btnOpenLog);
+        btnLoadList = findViewById(R.id.btnLoadList);
 
         regMailIndex = findViewById(R.id.regMailIndex);
         regPChannel  = findViewById(R.id.regPChannel);
@@ -73,7 +85,47 @@ public class SettingsActivity extends AppCompatActivity {
             startActivity(i);
         });
 
+        /* Регистрация file picker для list.txt. */
+        filePicker = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri -> {
+                    if (uri != null) applyListFile(uri);
+                });
+
+        if (btnLoadList != null) {
+            btnLoadList.setOnClickListener(v ->
+                    filePicker.launch(new String[]{"text/plain", "*/*"}));
+        }
+
         loadSettings();
+    }
+
+    /* Применить выбранный list.txt. */
+    private void applyListFile(Uri uri) {
+        try {
+            InputStream is = getContentResolver().openInputStream(uri);
+            if (is == null) {
+                Toast.makeText(this, R.string.toast_list_error,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            int n = PmrService.listFile.loadFromStream(is);
+            is.close();
+
+            File dest = new File(getFilesDir(), "list.txt");
+            PmrService.listFile.save(dest);
+
+            if (PmrService.chanList != null) PmrService.chanList.clear();
+            if (PmrService.pmrSocket != null) PmrService.pmrSocket.sendList();
+
+            Toast.makeText(this,
+                    getString(R.string.toast_list_loaded, n),
+                    Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            AppLog.add("applyListFile error: " + e);
+            Toast.makeText(this, R.string.toast_list_error,
+                    Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void loadSettings() {
@@ -99,7 +151,6 @@ public class SettingsActivity extends AppCompatActivity {
         boolean on26 = sp.getBoolean(PasswordActivity.KEY_26_STATE, false);
         updateBtn26(on26);
 
-        /* Регистрационные данные. */
         if (regMailIndex != null)
             regMailIndex.setText(sp.getString(
                     PasswordActivity.KEY_MY_MAIL_INDEX,
@@ -238,7 +289,6 @@ public class SettingsActivity extends AppCompatActivity {
         sp.edit().putBoolean(PasswordActivity.KEY_CHECK_SYSTEM,
                 checkSystem).apply();
 
-        /* Регистрационные данные. */
         String myMailIndex = (regMailIndex != null)
                 ? regMailIndex.getText().toString().trim() : "";
         String myPChannel = (regPChannel != null)
@@ -269,12 +319,10 @@ public class SettingsActivity extends AppCompatActivity {
         if (!city.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CITY, city).apply();
 
-        /* Применить новые настройки к работающему PmrSocket. */
         if (PmrService.pmrSocket != null) {
             PmrService.pmrSocket.reloadFromPrefs(this);
         }
 
-        /* Отправка rename на сервер. */
         if (PmrService.pmrSocket != null
                 && !priznak.isEmpty()
                 && !callsign.isEmpty()

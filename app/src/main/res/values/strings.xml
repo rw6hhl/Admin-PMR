@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Admin PMR</string>
-    <string name="app_version">V3.3</string>
+    <string name="app_version">V4.0</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -76,7 +76,6 @@
     <string name="check_on">ВКЛЮЧЁН</string>
     <string name="check_off">ОТКЛЮЧЁН</string>
 
-    <!-- V3.3 -->
     <string name="btn_ptt">ПЕРЕДАЧА (PTT)</string>
     <string name="btn_load_list">ЗАГРУЗИТЬ list.txt</string>
     <string name="toast_list_loaded">Список загружен: %1$d записей</string>

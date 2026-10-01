@@ -45,26 +45,11 @@
         android:layout_marginLeft="12dp"
         android:layout_marginRight="12dp"
         android:layout_marginTop="8dp"
+        android:layout_marginBottom="12dp"
         android:text="@string/btn_ptt"
         android:textSize="22sp"
         android:textStyle="bold"
         android:textColor="@color/c_white"
         android:backgroundTint="@color/c_blue" />
-
-    <!-- Кнопка загрузки list.txt -->
-    <Button
-        android:id="@+id/btnLoadList"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginLeft="12dp"
-        android:layout_marginRight="12dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="12dp"
-        android:text="@string/btn_load_list"
-        android:textSize="16sp"
-        android:textColor="@color/c_white"
-        android:backgroundTint="@color/c_green"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp" />
 
 </LinearLayout>
