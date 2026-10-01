@@ -14,7 +14,7 @@ import android.media.MediaRecorder;
  *   - громкость воспроизведения +70%: STREAM_MUSIC + setVolume(1.7f);
  *   - отправка голоса двумя пакетами: 324 байта на основной порт,
  *     326 байт на резервные — как в C-коде с фото;
- *   - устранена ошибка с int secret из PmrSocket.
+ *   - исправлена ошибка компиляции: PmrSocket.Priznak_pmr.
  */
 public class AudioEngine {
 
@@ -300,8 +300,8 @@ public class AudioEngine {
                 continue;
             }
 
-            /* Собираем пакет 326 байт:
-             * [cmd][kanal=0][client_lo][client_hi][secret_lo][secret_hi][payload...] */
+            /* Резервный пакет 326 байт:
+             * [cmd][kanal=0][client_lo][client_hi][secret_lo][secret_hi][payload] */
             int secret = (pmrSocket != null) ? pmrSocket.getKanalSecretInstance() : 0;
             byte[] packet = new byte[6 + payloadLen];
             packet[0] = (byte) cmd;
@@ -312,14 +312,12 @@ public class AudioEngine {
             packet[5] = (byte) ((secret >> 8) & 0xFF);
             System.arraycopy(payload, 0, packet, 6, payloadLen);
 
-            /* Основной пакет 324 байта = 4 + payload (без secret).
-             * Резервный 326 байт = 6 + payload (с secret).
-             * Как в C-коде с фото: основной идёт на PORT_PRD, резерв — на 16300. */
+            /* Основной пакет 324 байта — без secret, как в C-коде. */
             byte[] mainPacket = new byte[4 + payloadLen];
             mainPacket[0] = (byte) cmd;
             mainPacket[1] = 0;
-            mainPacket[2] = (byte) (Priznak_pmr & 0xFF);
-            mainPacket[3] = (byte) ((Priznak_pmr >> 8) & 0xFF);
+            mainPacket[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
+            mainPacket[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
             System.arraycopy(payload, 0, mainPacket, 4, payloadLen);
 
             if (pmrSocket != null) {
