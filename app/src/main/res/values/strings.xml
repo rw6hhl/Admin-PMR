@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Admin PMR</string>
-    <string name="app_version">V4.1</string>
+    <string name="app_version">V4.2</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -76,8 +76,13 @@
     <string name="check_on">ВКЛЮЧЁН</string>
     <string name="check_off">ОТКЛЮЧЁН</string>
 
+    <!-- V4.2: кнопка загрузки list.txt (уже есть в V4.0) -->
     <string name="btn_ptt">ПЕРЕДАЧА (PTT)</string>
     <string name="btn_load_list">ЗАГРУЗИТЬ list.txt</string>
     <string name="toast_list_loaded">Список загружен: %1$d записей</string>
     <string name="toast_list_error">Ошибка загрузки list.txt</string>
+    <string name="ind_tx">ПЕРЕДАЧА</string>
+    <string name="ind_rx">ПРИЁМ</string>
+    <string name="settings_ip_server2_title">IP-сервер 2</string>
+    <string name="settings_ip_server2_hint">109.172.7.155</string>
 </resources>

@@ -10,9 +10,14 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля V3.2.
- * Добавлены:
- *   - KEY_IP_SERVER2 и DEFAULT_IP_SERVER2.
+/* Экран ввода пароля Admin PMR V4.2.
+ *
+ * Изменения V4.2:
+ *   - один IP: KEY_IP_SERVER (185.221.154.39);
+ *   - убран KEY_IP_SERVER2;
+ *   - KEY_PORT_PRM = "port_prm", DEFAULT_PORT_PRM = 5323;
+ *   - KEY_PORT_PRD = "port_prd", DEFAULT_PORT_PRD = 16000;
+ *   - DEFAULT_PRIZNAK_PMR = "26000".
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -21,28 +26,26 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_REFRESH = "refresh_sec";
     public static final String KEY_REQUIRE_PASSWORD = "require_password";
     public static final String KEY_PORT_PRM = "port_prm";
+    public static final String KEY_PORT_PRD = "port_prd";
     public static final String KEY_CHECK_SYSTEM = "check_system";
     public static final String KEY_26_STATE = "state_26";
 
-    /* Регистрационные данные. */
     public static final String KEY_MY_MAIL_INDEX = "my_mail_index";
     public static final String KEY_MY_PCHANNEL   = "my_pchannel";
     public static final String KEY_PRIZNAK_PMR   = "priznak_pmr";
     public static final String KEY_IP_SERVER     = "ip_server";
-    public static final String KEY_IP_SERVER2    = "ip_server2";
     public static final String KEY_CALLSIGN      = "callsign";
     public static final String KEY_CITY          = "city";
 
     public static final String DEFAULT_PASSWORD = "Rostov2026";
     public static final int    DEFAULT_REFRESH = 2;
     public static final int    DEFAULT_PORT_PRM = 5323;
+    public static final int    DEFAULT_PORT_PRD = 16000;
 
-    /* Значения по умолчанию для регистрационных данных. */
     public static final String DEFAULT_MY_MAIL_INDEX = "51953";
     public static final String DEFAULT_MY_PCHANNEL   = "5";
-    public static final String DEFAULT_PRIZNAK_PMR   = "11777";
+    public static final String DEFAULT_PRIZNAK_PMR   = "26000";
     public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
-    public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
 
