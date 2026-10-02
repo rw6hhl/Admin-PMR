@@ -11,20 +11,24 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V4.2.
+/* UDP-логика PMR V4.3.
  *
- * Изменения V4.2:
- *   - один IP-сервер: IP_SERVER = 185.221.154.39;
- *   - PORT_prm (приём) = 5323, PORT_prd (передача) = 16000;
- *   - убраны IP_SERVER2 и PORT_RESERVE;
- *   - отправка только на IP_SERVER : port_prd + kanal_PRD;
- *   - Priznak_pmr = 26000.
+ * Изменения V4.3:
+ *   - возвращена отправка на 3 адреса (V4.2 отправляла на 1 адрес — сервер не отвечал);
+ *   - основной:   IP_SERVER : port_prd + kanal_PRD  (port_prd из настроек, 16000);
+ *   - резерв 1:   IP_SERVER : 16300 + kanal_PRD;
+ *   - резерв 2:   109.172.7.155 : 16300 + kanal_PRD (второй сервер, константа);
+ *   - IP_SERVER2 и PORT_RESERVE — константы, в UI не выводятся;
+ *   - port_prm и port_prd — из настроек (регистрационные данные).
  */
 public class PmrSocket {
 
-    public static String IP_SERVER = "185.221.154.39";
-    public static final int PORT_CMD   = 15999;
-    public static final int PORT_CHECK = 16013;
+    public static String IP_SERVER  = "185.221.154.39";
+    public static final String IP_SERVER2 = "109.172.7.155";
+
+    public static final int PORT_RESERVE = 16300;
+    public static final int PORT_CMD     = 15999;
+    public static final int PORT_CHECK   = 16013;
 
     public static int MyMailIndex = 51953;
     public static int MyPChannel  = 5;
@@ -40,6 +44,7 @@ public class PmrSocket {
 
     private volatile DatagramSocket sock;
     private volatile InetAddress serverAddr;
+    private volatile InetAddress serverAddr2;
     private int port_prm = 5323;
     private int port_prd = 16000;
     private int kanal_PRD = 0;
@@ -80,17 +85,32 @@ public class PmrSocket {
     public static int getKanalSecretStatic() { return 0; }
     public void sendRawPublic(byte[] buf) { sendRaw(buf); }
 
-    /* Отправка голоса: mainPacket → IP_SERVER : port_prd + kanal_PRD. */
+    /* Голос: основной → IP_SERVER : port_prd + kanal_PRD;
+     *       резервные → 16300 на оба сервера. */
     public void sendVoice(byte[] mainPacket, byte[] reservePacket) {
         if (mainPacket == null) return;
         DatagramSocket s = sock;
-        InetAddress a = serverAddr;
-        if (s == null || a == null) return;
+        InetAddress a1 = serverAddr;
+        InetAddress a2 = serverAddr2;
+        if (s == null || a1 == null) return;
+
         try {
             s.send(new DatagramPacket(mainPacket, mainPacket.length,
-                    a, port_prd + kanal_PRD));
+                    a1, port_prd + kanal_PRD));
         } catch (Exception e) {
-            AppLog.add("sendVoice FAIL: " + e);
+            AppLog.add("sendVoice main FAIL: " + e);
+        }
+        if (reservePacket != null) {
+            try {
+                s.send(new DatagramPacket(reservePacket, reservePacket.length,
+                        a1, PORT_RESERVE + kanal_PRD));
+            } catch (Exception ignored) {}
+            if (a2 != null) {
+                try {
+                    s.send(new DatagramPacket(reservePacket, reservePacket.length,
+                            a2, PORT_RESERVE + kanal_PRD));
+                } catch (Exception ignored) {}
+            }
         }
     }
 
@@ -121,13 +141,16 @@ public class PmrSocket {
         try {
             if (serverAddr != null) serverAddr = InetAddress.getByName(IP_SERVER);
         } catch (Exception ignored) {}
+        try {
+            if (serverAddr2 != null) serverAddr2 = InetAddress.getByName(IP_SERVER2);
+        } catch (Exception ignored) {}
         if (MyPChannel == 0) kanal_PRD = 0;
         else kanal_PRD = ((MyMailIndex & 0xF) * 8) + MyPChannel;
         kanal_Secret = (MyMailIndex & 0xFFFFFFF0) >> 4;
         AppLog.add("PmrSocket.reload: mail=" + MyMailIndex
                 + ", ch=" + MyPChannel + ", priznak=" + Priznak_pmr
-                + ", ip=" + IP_SERVER + ", port_prm=" + port_prm
-                + ", port_prd=" + port_prd
+                + ", ip=" + IP_SERVER + ", ip2=" + IP_SERVER2
+                + ", port_prm=" + port_prm + ", port_prd=" + port_prd
                 + ", kanal=" + kanal_PRD + ", secret=" + kanal_Secret);
     }
 
@@ -145,7 +168,8 @@ public class PmrSocket {
             sock.setSoTimeout(100);
             IP_SERVER = sp.getString(PasswordActivity.KEY_IP_SERVER,
                     PasswordActivity.DEFAULT_IP_SERVER);
-            serverAddr = InetAddress.getByName(IP_SERVER);
+            serverAddr  = InetAddress.getByName(IP_SERVER);
+            serverAddr2 = InetAddress.getByName(IP_SERVER2);
         } catch (Exception e) {
             AppLog.add("PmrSocket: ошибка сокета — " + e);
             return;
@@ -170,7 +194,7 @@ public class PmrSocket {
         kanal_Secret = (MyMailIndex & 0xFFFFFFF0) >> 4;
         AppLog.add("PmrSocket: port_prm=" + port_prm + ", port_prd=" + port_prd
                 + ", kanal=" + kanal_PRD + ", secret=" + kanal_Secret
-                + ", ip=" + IP_SERVER);
+                + ", ip1=" + IP_SERVER + ", ip2=" + IP_SERVER2);
         running = true;
         threadUdp = new Thread(this::udpLoop, "pmr-udp");
         threadUdp.start();
@@ -226,6 +250,7 @@ public class PmrSocket {
             if (diag > 50) {
                 AppLog.add("диаг: sock=" + (sock != null)
                         + ", server=" + (serverAddr != null)
+                        + ", server2=" + (serverAddr2 != null)
                         + ", running=" + running + ", kanal_PRD=" + kanal_PRD
                         + ", port_prd=" + port_prd);
                 diag = 0;
@@ -373,18 +398,27 @@ public class PmrSocket {
         }
     }
 
-    /* Служебные пакеты — один адрес: IP_SERVER : port_prd + kanal_PRD. */
+    /* Служебные пакеты: основной + 2 резерва. */
     private void sendRaw(byte[] buf) {
         DatagramSocket s = sock;
-        InetAddress a = serverAddr;
-        if (s == null || a == null) {
-            AppLog.add("sendRaw: sock или server = null");
+        InetAddress a1 = serverAddr;
+        InetAddress a2 = serverAddr2;
+        if (s == null || a1 == null) {
+            AppLog.add("sendRaw: sock или server1 = null");
             return;
         }
         try {
-            s.send(new DatagramPacket(buf, buf.length, a, port_prd + kanal_PRD));
+            s.send(new DatagramPacket(buf, buf.length, a1, port_prd + kanal_PRD));
         } catch (Exception e) {
-            AppLog.add("sendRaw FAIL: " + e);
+            AppLog.add("sendRaw (main) FAIL: " + e);
+        }
+        try {
+            s.send(new DatagramPacket(buf, buf.length, a1, PORT_RESERVE + kanal_PRD));
+        } catch (Exception ignored) {}
+        if (a2 != null) {
+            try {
+                s.send(new DatagramPacket(buf, buf.length, a2, PORT_RESERVE + kanal_PRD));
+            } catch (Exception ignored) {}
         }
     }
 
