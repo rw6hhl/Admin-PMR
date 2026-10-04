@@ -11,17 +11,13 @@ import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.os.Build;
 
-/* Звуковой движок Admin PMR V4.6.
+/* Звуковой движок Admin PMR V4.7.
  *
- * Изменения V4.6 (по сравнению с V4.5):
- *   - AudioTrack создаётся через Builder с PERFORMANCE_MODE_LOW_LATENCY (API 26+);
- *   - буфер AudioTrack = minBuf (минимально возможный);
- *   - при пустом кольцевом буфере НЕ пишем тишину — sleep(20);
- *   - проверка write() и getPlayState() — восстановление play() при state != PLAYING;
- *   - RING_SIZE уменьшен до 20 пакетов (400 мс);
- *   - расширенная диагностика: state, head, bufSize, lag, ring, underrun, writeErr, played.
- *
- * Запись — по PTT (как V4.5): G711 16 кГц, усиление mic_gain.
+ * Изменения V4.7:
+ *   - добавлено усиление динамика spk_gain (0..100 → 1.0..2.0);
+ *   - применяется к PCM перед write() в AudioTrack;
+ *   - setVolume(1.7f) остаётся как дополнительный boost;
+ *   - воспроизведение (RING_SIZE, LOW_LATENCY) не менялось.
  */
 public class AudioEngine {
 
@@ -40,14 +36,12 @@ public class AudioEngine {
     private static final int onUsilDin = 1;
     private static final double DinUsildouble = 0.4;
 
-    /* Кольцевой буфер — 20 пакетов (400 мс). */
     private static final int RING_SIZE = 20;
 
     private static final int REC_BUF_SAMPLES = 320;
     private static final int REC_BUF_BYTES   = REC_BUF_SAMPLES * 2;
     private static final int REC_G711_BYTES  = REC_BUF_SAMPLES;
 
-    /* Порог запуска воспроизведения — как Uprevdenie=1 в C. */
     private static final int START_THRESHOLD = 2;
 
     private final Context appCtx;
@@ -80,7 +74,6 @@ public class AudioEngine {
     private int droppedCount = 0;
     private int writeErrors = 0;
 
-    /* Запись. */
     private AudioRecord recorder = null;
     private Thread recordThread = null;
     private volatile boolean isRecording = false;
@@ -148,7 +141,6 @@ public class AudioEngine {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O;
     }
 
-    /* Создать AudioTrack с минимально возможной задержкой. */
     private void ensureTrack(int client, int rate) {
         if (track != null && trackClient == client && trackRate == rate) {
             return;
@@ -202,7 +194,8 @@ public class AudioEngine {
         AppLog.add("AudioEngine: created AudioTrack client=" + client
                 + ", rate=" + rate
                 + ", minBuf=" + minBuf
-                + ", lowLatency=" + isLowLatencySupported());
+                + ", lowLatency=" + isLowLatencySupported()
+                + ", setVolume=" + VOLUME_BOOST);
     }
 
     private void playLoop() {
@@ -255,8 +248,15 @@ public class AudioEngine {
                     currentRate = pcmRate;
                     ensureTrack(currentClient, currentRate);
                 }
+
+                /* Усиление динамика: 0..100 → 1.0..2.0. */
+                SharedPreferences sp = appCtx.getSharedPreferences(
+                        PasswordActivity.PREFS, Context.MODE_PRIVATE);
+                int spkGain = sp.getInt(PasswordActivity.KEY_SPK_GAIN,
+                        PasswordActivity.DEFAULT_SPK_GAIN);
+                byte[] out = applyGain(pcm, pcm.length, spkGain);
+
                 if (track != null) {
-                    /* Проверка состояния перед write — если STOPPED, перезапуск. */
                     try {
                         int st = track.getPlayState();
                         if (st != AudioTrack.PLAYSTATE_PLAYING) {
@@ -265,7 +265,7 @@ public class AudioEngine {
                     } catch (Exception ignored) {}
 
                     try {
-                        int written = track.write(pcm, 0, pcm.length);
+                        int written = track.write(out, 0, out.length);
                         if (written > 0) {
                             totalPlayed++;
                         } else {
@@ -283,7 +283,6 @@ public class AudioEngine {
                     }
                 }
             } else {
-                /* Пакетов нет — НЕ пишем тишину. Спим 20 мс — ничего не буферизуем. */
                 underrunCount++;
                 try { Thread.sleep(20); } catch (InterruptedException ignored) {}
             }
@@ -450,6 +449,7 @@ public class AudioEngine {
         }
     }
 
+    /* 0..100 → 1.0..2.0. 0 → 1.0. */
     private byte[] applyGain(byte[] pcm, int len, int gain) {
         if (gain <= 0) return pcm;
         double g = (double) gain / 50.0;

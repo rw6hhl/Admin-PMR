@@ -19,7 +19,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек Admin PMR V4.5. */
+/* Экран настроек Admin PMR V4.7. */
 public class SettingsActivity extends AppCompatActivity {
 
     private EditText passCurrent;
@@ -42,6 +42,7 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regPortPrm;
     private EditText regPortPrd;
     private EditText regMicGain;
+    private EditText regSpkGain;
     private EditText regCallsign;
     private EditText regCity;
 
@@ -74,6 +75,7 @@ public class SettingsActivity extends AppCompatActivity {
         regPortPrm   = findViewById(R.id.regPortPrm);
         regPortPrd   = findViewById(R.id.regPortPrd);
         regMicGain   = findViewById(R.id.regMicGain);
+        regSpkGain   = findViewById(R.id.regSpkGain);
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
 
@@ -182,6 +184,10 @@ public class SettingsActivity extends AppCompatActivity {
             regMicGain.setText(String.valueOf(sp.getInt(
                     PasswordActivity.KEY_MIC_GAIN,
                     PasswordActivity.DEFAULT_MIC_GAIN)));
+        if (regSpkGain != null)
+            regSpkGain.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_SPK_GAIN,
+                    PasswordActivity.DEFAULT_SPK_GAIN)));
         if (regCallsign != null)
             regCallsign.setText(sp.getString(
                     PasswordActivity.KEY_CALLSIGN,
@@ -282,6 +288,8 @@ public class SettingsActivity extends AppCompatActivity {
                 ? regPortPrd.getText().toString().trim() : "";
         String micGainStr = (regMicGain != null)
                 ? regMicGain.getText().toString().trim() : "";
+        String spkGainStr = (regSpkGain != null)
+                ? regSpkGain.getText().toString().trim() : "";
         String callsign = (regCallsign != null)
                 ? regCallsign.getText().toString().trim() : "";
         String city = (regCity != null)
@@ -333,6 +341,14 @@ public class SettingsActivity extends AppCompatActivity {
                 if (v < 0) v = 0;
                 if (v > 100) v = 100;
                 sp.edit().putInt(PasswordActivity.KEY_MIC_GAIN, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+        if (!spkGainStr.isEmpty()) {
+            try {
+                int v = Integer.parseInt(spkGainStr);
+                if (v < 0) v = 0;
+                if (v > 200) v = 200;
+                sp.edit().putInt(PasswordActivity.KEY_SPK_GAIN, v).apply();
             } catch (NumberFormatException ignored) {}
         }
         if (!callsign.isEmpty()) sp.edit().putString(

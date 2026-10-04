@@ -18,8 +18,6 @@
             android:textStyle="bold"
             android:textColor="@color/c_blue" />
 
-        <!-- ============ Смена пароля ============ -->
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -82,8 +80,6 @@
             android:textSize="16sp"
             android:checked="true" />
 
-        <!-- ============ Источник списка абонентов ============ -->
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -126,8 +122,6 @@
             android:textSize="16sp"
             android:paddingTop="10dp"
             android:paddingBottom="10dp" />
-
-        <!-- ============ Регистрационные данные ============ -->
 
         <TextView
             android:layout_width="match_parent"
@@ -256,6 +250,24 @@
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
             <EditText android:id="@+id/regMicGain"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="140dp"
+                android:text="Spk  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+            <EditText android:id="@+id/regSpkGain"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
