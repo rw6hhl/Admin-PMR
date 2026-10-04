@@ -1,24 +1,17 @@
 package com.pmr.admin;
 
 import android.content.Context;
-import android.content.SharedPreferences;
-import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
 
-/* Звуковой движок Android Link PMR V1.10.
+/* Звуковой движок Android Link PMR V1.11.
  *
- * Изменения V1.10:
- *   - возвращена логика V4.1: pkt[2..3] = Priznak_pmr (а не myClient);
- *   - формируются два пакета: mainPacket (324 байта, без secret)
- *     и reservePacket (326 байт, с secret);
- *   - sendVoice(mainPacket, reservePacket) — с двумя аргументами;
- *   - метод getMyClient() удалён.
- *   - всё остальное как в V1.9: усиление (onUsilDin=1, DinUsildouble=2.0,
- *     onUsilMic=1, MicUsildouble=2.0), Mic/Spk из SharedPreferences.
+ * Изменения V1.11:
+ *   - параметры передачи возвращены к V4.2: убрано усиление микрофона
+ *     (onUsilMic, MicUsildouble, micGain). Звук идёт как есть.
+ *   - всё остальное как в V1.10: приём, 40 слотов AudioTrack, playG711_16k и т. д.
  */
 public class AudioEngine {
 
@@ -36,13 +29,13 @@ public class AudioEngine {
 
     private static final double RMS_DIVISOR = 25.0;
 
-    /* Усиление приёма. */
+    /* Усиление приёма — как в V4.2. */
     private static final int    onUsilDin     = 1;
-    private static final double DinUsildouble = 2.0;
+    private static final double DinUsildouble = 0.4;
 
-    /* Усиление микрофона. */
-    private static final int    onUsilMic     = 1;
-    private static final double MicUsildouble = 2.0;
+    /* Передача — как в V4.2. */
+    private static final int    BUF_ELEMENTS  = 320;
+    private static final int    BYTES_PER_ELEM = 2;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -56,43 +49,25 @@ public class AudioEngine {
     private volatile boolean isRecording = false;
     private Thread recThread;
 
-    private int micGain = 70;
-    private int spkGain = 70;
-    private float volumeBoost = 1.4f;
+    /* Режим передачи — как в V4.2. */
+    private volatile int rej = 22;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
         this.pmrSocket = sock;
-        reloadGains();
     }
 
-    /* Чтение Mic и Spk из SharedPreferences. */
-    public void reloadGains() {
-        SharedPreferences sp = appCtx.getSharedPreferences(
-                PasswordActivity.PREFS, Context.MODE_PRIVATE);
-        micGain = sp.getInt(PasswordActivity.KEY_MIC_GAIN,
-                PasswordActivity.DEFAULT_MIC_GAIN);
-        spkGain = sp.getInt(PasswordActivity.KEY_SPK_GAIN,
-                PasswordActivity.DEFAULT_SPK_GAIN);
-        if (micGain < 0) micGain = 0;
-        if (micGain > 100) micGain = 100;
-        if (spkGain < 0) spkGain = 0;
-        if (spkGain > 200) spkGain = 200;
-        volumeBoost = (float) (spkGain / 100.0 * 2.0);
-    }
+    public void setRej(int r) { this.rej = r; }
+    public int  getRej()      { return rej; }
+    public boolean isRecording() { return isRecording; }
+    public boolean isPlaying()   { return isPlaying; }
 
-    public boolean isPlaying() { return isPlaying; }
-    public int getLastRxRms()  { return lastRxRms; }
-    public int getMicGain()    { return micGain; }
-    public int getSpkGain()    { return spkGain; }
+    public boolean isDuplex() { return true; }
+
+    /* ========================= ВОСПРОИЗВЕДЕНИЕ ========================= */
 
     public void startPlaying() {
         if (isPlaying) return;
-
-        reloadGains();
-        logCurrentAudioDevice("AudioEngine");
-        AppLog.add("AudioEngine: использование " +
-                (isUsbPresent() ? "USB-аудио" : "встроенного динамика"));
 
         for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
@@ -105,7 +80,7 @@ public class AudioEngine {
                                 AudioFormat.CHANNEL_OUT_MONO,
                                 AudioFormat.ENCODING_PCM_16BIT),
                         AudioTrack.MODE_STREAM);
-                try { tracks[i].setVolume(volumeBoost); } catch (Exception ignored) {}
+                try { tracks[i].setVolume(1.7f); } catch (Exception ignored) {}
             }
         }
         for (int i = OFFSET_8K; i < OFFSET_8K + SLOTS_PER_FORMAT; i++) {
@@ -119,14 +94,11 @@ public class AudioEngine {
                                 AudioFormat.CHANNEL_OUT_MONO,
                                 AudioFormat.ENCODING_PCM_16BIT),
                         AudioTrack.MODE_STREAM);
-                try { tracks[i].setVolume(volumeBoost); } catch (Exception ignored) {}
+                try { tracks[i].setVolume(1.7f); } catch (Exception ignored) {}
             }
         }
         isPlaying = true;
-        AppLog.add("AudioEngine: startPlaying, volumeBoost=" + volumeBoost
-                + ", micGain=" + micGain + ", spkGain=" + spkGain
-                + ", onUsilDin=" + onUsilDin + ", DinUsildouble=" + DinUsildouble
-                + ", onUsilMic=" + onUsilMic + ", MicUsildouble=" + MicUsildouble);
+        AppLog.add("AudioEngine: startPlaying, slots=" + tracks.length);
     }
 
     public void stopPlaying() {
@@ -143,152 +115,22 @@ public class AudioEngine {
         }
     }
 
-    /* Запуск записи с микрофона. */
-    public void startRecording() {
-        if (isRecording) return;
-        reloadGains();
-        try {
-            int minBuf = AudioRecord.getMinBufferSize(
-                    SAMPLE_RATE_16K,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT);
-            if (minBuf < 1280) minBuf = 1280;
-            recorder = new AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE_16K,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    minBuf);
-            if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
-                AppLog.add("AudioEngine: AudioRecord не инициализирован");
-                recorder = null;
-                return;
-            }
-            recorder.startRecording();
-            isRecording = true;
-            AppLog.add("AudioEngine: startRecording, minBuf=" + minBuf
-                    + ", micGain=" + micGain + ", MicUsildouble=" + MicUsildouble);
-            recThread = new Thread(this::recLoop, "pmr-rec");
-            recThread.start();
-        } catch (Exception e) {
-            AppLog.add("AudioEngine: startRecording FAIL: " + e);
-        }
-    }
-
-    public void stopRecording() {
-        isRecording = false;
-        if (recorder != null) {
-            try {
-                recorder.stop();
-                recorder.release();
-            } catch (Exception ignored) {}
-            recorder = null;
-        }
-        AppLog.add("AudioEngine: stopRecording");
-    }
-
-    private void recLoop() {
-        byte[] pcm = new byte[1280];
-        byte[] ulaw = new byte[640];
-        int totalSent = 0;
-        while (isRecording) {
-            AudioRecord r = recorder;
-            if (r == null) break;
-            int n = r.read(pcm, 0, pcm.length);
-            if (n <= 0) continue;
-
-            /* Усиление микрофона. */
-            double usil = (onUsilMic != 0) ? MicUsildouble : 1.0;
-            double micNorm = micGain / 100.0;
-            double totalGain = usil * micNorm * MicUsildouble;
-
-            for (int i = 0; i < n; i += 2) {
-                short s = (short) ((pcm[i] & 0xFF) | (pcm[i + 1] << 8));
-                int v = (int) (s * totalGain);
-                if (v > 32767) v = 32767;
-                if (v < -32768) v = -32768;
-                pcm[i] = (byte) (v & 0xFF);
-                pcm[i + 1] = (byte) ((v >> 8) & 0xFF);
-            }
-
-            int rms = calcRms(pcm, n);
-            g711.encode(pcm, 0, n, ulaw);
-
-            /* Формирование пакетов как в V4.1.
-             * pkt[1]    = канал (MyPChannel)
-             * pkt[2..3] = Priznak_pmr (а не myClient!) */
-            int secret = (pmrSocket != null) ? pmrSocket.getKanalSecretInstance() : 0;
-            int payloadLen = Math.min(ulaw.length, 320);
-
-            /* Основной пакет 324 байта: [cmd][kanal][priznak_lo][priznak_hi][payload] */
-            byte[] mainPacket = new byte[4 + payloadLen];
-            mainPacket[0] = (byte) CMD_G711_16K;
-            mainPacket[1] = (byte) (PmrSocket.MyPChannel & 0xFF);
-            mainPacket[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
-            mainPacket[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-            System.arraycopy(ulaw, 0, mainPacket, 4, payloadLen);
-
-            /* Резервный пакет 326 байт: [cmd][kanal][priznak_lo][priznak_hi][secret_lo][secret_hi][payload] */
-            byte[] reservePacket = new byte[6 + payloadLen];
-            reservePacket[0] = (byte) CMD_G711_16K;
-            reservePacket[1] = (byte) (PmrSocket.MyPChannel & 0xFF);
-            reservePacket[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
-            reservePacket[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-            reservePacket[4] = (byte) (secret & 0xFF);
-            reservePacket[5] = (byte) ((secret >> 8) & 0xFF);
-            System.arraycopy(ulaw, 0, reservePacket, 6, payloadLen);
-
-            pmrSocket.sendVoice(mainPacket, reservePacket);
-            totalSent++;
-            if (totalSent % 50 == 0) {
-                AppLog.add("AudioEngine: rec rms=" + rms
-                        + ", gain=" + micGain
-                        + ", priznak=" + PmrSocket.Priznak_pmr
-                        + ", sent=" + totalSent);
+    public void playall() {
+        for (int i = 0; i < tracks.length; i++) {
+            if (tracks[i] != null && tracks[i].getState() == AudioTrack.STATE_INITIALIZED) {
+                try { tracks[i].play(); } catch (Exception ignored) {}
             }
         }
     }
 
-    private int calcRms(byte[] pcm, int len) {
-        long sum = 0;
-        int n = len / 2;
-        for (int i = 0; i < n; i++) {
-            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
-            sum += (long) s * s;
-        }
-        if (n == 0) return 0;
-        double mean = (double) sum / n;
-        double rms = Math.sqrt(mean);
-        double usil = (onUsilDin != 0) ? DinUsildouble : 1.0;
-        int scaled = (int) ((rms * usil) / RMS_DIVISOR);
-        if (scaled > 1000) scaled = 1000;
-        return scaled;
-    }
-
-    private boolean isUsbPresent() {
-        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return false;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
-        for (AudioDeviceInfo d : devs) {
-            int t = d.getType();
-            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
-                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
-                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
-                return true;
+    public void pauseall() {
+        for (int i = 0; i < tracks.length; i++) {
+            if (tracks[i] != null && tracks[i].getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
+                try {
+                    tracks[i].pause();
+                    tracks[i].flush();
+                } catch (Exception ignored) {}
             }
-        }
-        return false;
-    }
-
-    private void logCurrentAudioDevice(String tag) {
-        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
-        for (AudioDeviceInfo d : devs) {
-            CharSequence pn = d.getProductName();
-            String name = (pn != null) ? pn.toString() : "?";
-            AppLog.add(tag + ": output device type=" + d.getType()
-                    + ", name=" + name);
         }
     }
 
@@ -301,7 +143,19 @@ public class AudioEngine {
     }
 
     private void updateRxRms(byte[] pcm, int len) {
-        lastRxRms = calcRms(pcm, len);
+        long sum = 0;
+        int n = len / 2;
+        for (int i = 0; i < n; i++) {
+            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
+            sum += (long) s * s;
+        }
+        if (n == 0) { lastRxRms = 0; return; }
+        double mean = (double) sum / n;
+        double rms = Math.sqrt(mean);
+        double usil = (onUsilDin != 0) ? DinUsildouble : 1.0;
+        int scaled = (int) ((rms * usil) / RMS_DIVISOR);
+        if (scaled > 1000) scaled = 1000;
+        lastRxRms = scaled;
     }
 
     public void playG711_16k(int client, byte[] buf, int len) {
@@ -393,6 +247,138 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
+    /* ============================ ЗАПИСЬ ============================ */
+
+    public void startRecording() {
+        if (isRecording) return;
+
+        int sampleRate;
+        int bufSize;
+        if (rej == CMD_G711_16K || rej == CMD_PCM16_16K || rej == CMD_PCM8_16K) {
+            sampleRate = SAMPLE_RATE_16K;
+            bufSize = BUF_ELEMENTS * BYTES_PER_ELEM;
+        } else {
+            sampleRate = SAMPLE_RATE_8K;
+            bufSize = BUF_ELEMENTS * BYTES_PER_ELEM / 2;
+        }
+
+        try {
+            recorder = new AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufSize * 2);
+            recorder.startRecording();
+            isRecording = true;
+
+            recThread = new Thread(() -> recLoop(sampleRate), "pmr-rec");
+            recThread.start();
+
+            AppLog.add("AudioEngine: startRecording, rate=" + sampleRate
+                    + ", rej=" + rej);
+        } catch (Exception e) {
+            AppLog.add("AudioEngine: startRecording FAIL: " + e);
+        }
+    }
+
+    public void stopRecording() {
+        isRecording = false;
+        if (recorder != null) {
+            try {
+                recorder.stop();
+                recorder.release();
+            } catch (Exception ignored) {}
+            recorder = null;
+        }
+        recThread = null;
+        AppLog.add("AudioEngine: stopRecording");
+    }
+
+    private void recLoop(int sampleRate) {
+        byte[] pcm16 = new byte[BUF_ELEMENTS * BYTES_PER_ELEM];
+        byte[] g711buf = new byte[BUF_ELEMENTS];
+        int totalSent = 0;
+
+        while (isRecording) {
+            int read;
+            try {
+                read = recorder.read(pcm16, 0, pcm16.length);
+            } catch (Exception e) {
+                break;
+            }
+            if (read <= 0) continue;
+
+            /* Никакого усиления — как в V4.2. */
+            int cmd;
+            int payloadLen;
+            byte[] payload;
+
+            if (rej == CMD_G711_16K) {
+                cmd = CMD_G711_16K;
+                g711.encode(pcm16, 0, read, g711buf);
+                payloadLen = read / 2;
+                payload = new byte[payloadLen];
+                System.arraycopy(g711buf, 0, payload, 0, payloadLen);
+            } else if (rej == CMD_PCM16_16K) {
+                cmd = CMD_PCM16_16K;
+                payloadLen = read;
+                payload = new byte[payloadLen];
+                System.arraycopy(pcm16, 0, payload, 0, payloadLen);
+            } else if (rej == CMD_PCM16_8K) {
+                cmd = CMD_PCM16_8K;
+                payloadLen = read;
+                payload = new byte[payloadLen];
+                System.arraycopy(pcm16, 0, payload, 0, payloadLen);
+            } else if (rej == CMD_PCM8_16K) {
+                cmd = CMD_PCM8_16K;
+                short[] s = byte2short(pcm16);
+                payloadLen = s.length;
+                payload = new byte[payloadLen];
+                for (int i = 0; i < s.length; i++) {
+                    payload[i] = (byte) (s[i] / 256);
+                }
+            } else if (rej == CMD_G711_8K) {
+                cmd = CMD_G711_8K;
+                g711.encode(pcm16, 0, read, g711buf);
+                payloadLen = read / 2;
+                payload = new byte[payloadLen];
+                System.arraycopy(g711buf, 0, payload, 0, payloadLen);
+            } else {
+                continue;
+            }
+
+            /* Резервный пакет 326 байт (с secret). */
+            int secret = (pmrSocket != null) ? pmrSocket.getKanalSecretInstance() : 0;
+            byte[] packet = new byte[6 + payloadLen];
+            packet[0] = (byte) cmd;
+            packet[1] = 0;
+            packet[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
+            packet[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
+            packet[4] = (byte) (secret & 0xFF);
+            packet[5] = (byte) ((secret >> 8) & 0xFF);
+            System.arraycopy(payload, 0, packet, 6, payloadLen);
+
+            /* Основной пакет 324 байта — без secret. */
+            byte[] mainPacket = new byte[4 + payloadLen];
+            mainPacket[0] = (byte) cmd;
+            mainPacket[1] = 0;
+            mainPacket[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
+            mainPacket[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
+            System.arraycopy(payload, 0, mainPacket, 4, payloadLen);
+
+            /* sendVoice отправит только mainPacket (логика V4.2). */
+            if (pmrSocket != null) {
+                pmrSocket.sendVoice(mainPacket, packet);
+            }
+            totalSent++;
+            if (totalSent % 50 == 0) {
+                AppLog.add("AudioEngine: rec priznak=" + PmrSocket.Priznak_pmr
+                        + ", sent=" + totalSent);
+            }
+        }
+    }
+
     private static byte[] short2byte(short[] sArr) {
         int length = sArr.length;
         byte[] bArr = new byte[length * 2];
@@ -402,5 +388,13 @@ public class AudioEngine {
             bArr[i2 + 1] = (byte) (sArr[i] >> 8);
         }
         return bArr;
+    }
+
+    private static short[] byte2short(byte[] b) {
+        short[] s = new short[b.length / 2];
+        for (int i = 0; i < s.length; i++) {
+            s[i] = (short) ((b[i * 2] & 255) | (b[i * 2 + 1] << 8));
+        }
+        return s;
     }
 }

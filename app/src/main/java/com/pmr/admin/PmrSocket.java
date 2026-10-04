@@ -16,12 +16,6 @@ import java.util.Set;
  * Изменения V4.3.1:
  *   - sendVoice() возвращён к логике V4.2: отправляется только mainPacket
  *     (324 байта) на port_prd + kanal_PRD. reservePacket игнорируется.
- *   - причина: в V4.3.0 отправлялись 3 пакета (1 основной + 2 резервных),
- *     сервер воспринимал это как спам и отключал клиента — передача рвалась.
- *   - sendRaw() для служебных пакетов оставлен на 3 адреса (как в V4.3.0) —
- *     служебные пакеты короткие и дублируются редко.
- *   - IP_SERVER2 и PORT_RESERVE — константы, в UI не выводятся.
- *   - port_prm и port_prd — из настроек (регистрационные данные).
  */
 public class PmrSocket {
 
@@ -87,11 +81,7 @@ public class PmrSocket {
     public static int getKanalSecretStatic() { return 0; }
     public void sendRawPublic(byte[] buf) { sendRaw(buf); }
 
-    /* Голос: отправляется ТОЛЬКО mainPacket (324 байта)
-     * на IP_SERVER : port_prd + kanal_PRD.
-     *
-     * Логика V4.2 — именно она работала. Резервные пакеты НЕ отправляются,
-     * потому что сервер воспринимает дубликаты как спам и отключает клиента. */
+    /* Голос: только mainPacket (324 байта) на IP_SERVER : port_prd + kanal_PRD. */
     public void sendVoice(byte[] mainPacket, byte[] reservePacket) {
         if (mainPacket == null) return;
         DatagramSocket s = sock;
@@ -104,7 +94,7 @@ public class PmrSocket {
         } catch (Exception e) {
             AppLog.add("sendVoice main FAIL: " + e);
         }
-        /* reservePacket игнорируется — так было в V4.2, где передача работала. */
+        /* reservePacket игнорируется — как в V4.2. */
     }
 
     public void reloadFromPrefs(Context ctx) {
