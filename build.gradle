@@ -1,42 +1,7 @@
+﻿// Корневой build.gradle проекта Admin PMR.
+// Определяет версии плагинов для всех модулей.
+// Плагин com.android.application подключается здесь с версией,
+// а в app/build.gradle — уже без версии (она подтянется отсюда).
 plugins {
-    id 'com.android.application'
-}
-
-android {
-    namespace 'com.pmr.admin'
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.pmr.admin"
-        minSdk 24
-        targetSdk 34
-        versionCode 50
-        versionName "5.0"
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    applicationVariants.all { variant ->
-        variant.outputs.all {
-            outputFileName = "app-v" + variant.versionName.replace(".", "_") + ".apk"
-        }
-    }
-}
-
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.10.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.recyclerview:recyclerview:1.3.2'
-    implementation 'androidx.viewpager2:viewpager2:1.0.0'
+    id 'com.android.application' version '8.1.4' apply false
 }
