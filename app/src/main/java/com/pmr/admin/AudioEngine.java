@@ -2,16 +2,16 @@ package com.pmr.admin;
 
 import android.content.Context;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
 
-/* Звуковой движок Android Link PMR V1.11.
+/* Звуковой движок Android Link PMR V1.12.
  *
- * Изменения V1.11:
- *   - параметры передачи возвращены к V4.2: убрано усиление микрофона
- *     (onUsilMic, MicUsildouble, micGain). Звук идёт как есть.
- *   - всё остальное как в V1.10: приём, 40 слотов AudioTrack, playG711_16k и т. д.
+ * Изменения V1.12:
+ *   - добавлен импорт android.media.AudioManager (был пропущен в V1.11).
+ *   - всё остальное как в V1.11: без усиления микрофона, параметры передачи V4.2.
  */
 public class AudioEngine {
 
