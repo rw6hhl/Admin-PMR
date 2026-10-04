@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Admin PMR</string>
-    <string name="app_version">V4.9</string>
+    <string name="app_version">V5.0</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -30,6 +30,9 @@
     <string name="settings_refresh_hint">2</string>
 
     <string name="settings_password_title">Требовать пароль при запуске</string>
+
+    <string name="settings_port_title">Порт приёма UDP</string>
+    <string name="settings_port_hint">5323</string>
 
     <string name="settings_check_title">Показывать проверку системы при запуске</string>
 
@@ -77,6 +80,4 @@
     <string name="btn_load_list">ЗАГРУЗИТЬ list.txt</string>
     <string name="toast_list_loaded">Список загружен: %1$d записей</string>
     <string name="toast_list_error">Ошибка загрузки list.txt</string>
-    <string name="ind_tx">ПЕРЕДАЧА</string>
-    <string name="ind_rx">ПРИЁМ</string>
 </resources>

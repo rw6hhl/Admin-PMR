@@ -11,14 +11,16 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V4.3.
+/* UDP-логика PMR V4.3.1.
  *
- * Изменения V4.3:
- *   - возвращена отправка на 3 адреса (V4.2 отправляла на 1 адрес — сервер не отвечал);
- *   - основной:   IP_SERVER : port_prd + kanal_PRD  (port_prd из настроек, 16000);
- *   - резерв 1:   IP_SERVER : 16300 + kanal_PRD;
- *   - резерв 2:   109.172.7.155 : 16300 + kanal_PRD (второй сервер, константа);
- *   - IP_SERVER2 и PORT_RESERVE — константы, в UI не выводятся;
+ * Изменения V4.3.1:
+ *   - sendVoice() возвращён к логике V4.2: отправляется только mainPacket
+ *     (324 байта) на port_prd + kanal_PRD. reservePacket игнорируется.
+ *   - причина: в V4.3.0 отправлялись 3 пакета (1 основной + 2 резервных),
+ *     сервер воспринимал это как спам и отключал клиента — передача рвалась.
+ *   - sendRaw() для служебных пакетов оставлен на 3 адреса (как в V4.3.0) —
+ *     служебные пакеты короткие и дублируются редко.
+ *   - IP_SERVER2 и PORT_RESERVE — константы, в UI не выводятся.
  *   - port_prm и port_prd — из настроек (регистрационные данные).
  */
 public class PmrSocket {
@@ -85,13 +87,15 @@ public class PmrSocket {
     public static int getKanalSecretStatic() { return 0; }
     public void sendRawPublic(byte[] buf) { sendRaw(buf); }
 
-    /* Голос: основной → IP_SERVER : port_prd + kanal_PRD;
-     *       резервные → 16300 на оба сервера. */
+    /* Голос: отправляется ТОЛЬКО mainPacket (324 байта)
+     * на IP_SERVER : port_prd + kanal_PRD.
+     *
+     * Логика V4.2 — именно она работала. Резервные пакеты НЕ отправляются,
+     * потому что сервер воспринимает дубликаты как спам и отключает клиента. */
     public void sendVoice(byte[] mainPacket, byte[] reservePacket) {
         if (mainPacket == null) return;
         DatagramSocket s = sock;
         InetAddress a1 = serverAddr;
-        InetAddress a2 = serverAddr2;
         if (s == null || a1 == null) return;
 
         try {
@@ -100,18 +104,7 @@ public class PmrSocket {
         } catch (Exception e) {
             AppLog.add("sendVoice main FAIL: " + e);
         }
-        if (reservePacket != null) {
-            try {
-                s.send(new DatagramPacket(reservePacket, reservePacket.length,
-                        a1, PORT_RESERVE + kanal_PRD));
-            } catch (Exception ignored) {}
-            if (a2 != null) {
-                try {
-                    s.send(new DatagramPacket(reservePacket, reservePacket.length,
-                            a2, PORT_RESERVE + kanal_PRD));
-                } catch (Exception ignored) {}
-            }
-        }
+        /* reservePacket игнорируется — так было в V4.2, где передача работала. */
     }
 
     public void reloadFromPrefs(Context ctx) {
