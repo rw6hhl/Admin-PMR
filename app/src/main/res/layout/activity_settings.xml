@@ -73,6 +73,62 @@
             android:textSize="16sp"
             android:checked="true" />
 
+        <!-- ============ Расширенная диагностика ============ -->
+
+        <CheckBox
+            android:id="@+id/diagBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Расширенная диагностика (для отладки)"
+            android:textSize="16sp"
+            android:checked="true" />
+
+        <!-- ============ Источник списка абонентов ============ -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Источник списка абонентов"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/listSourceGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp">
+
+            <RadioButton
+                android:id="@+id/radioListServer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Список от сервера (cmd=234)"
+                android:textSize="16sp"
+                android:checked="true" />
+
+            <RadioButton
+                android:id="@+id/radioListLocal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Список из list.txt (без запроса серверу)"
+                android:textSize="16sp" />
+        </RadioGroup>
+
+        <Button
+            android:id="@+id/btnLoadList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/btn_load_list"
+            android:backgroundTint="@color/c_blue"
+            android:textColor="@color/c_white"
+            android:textSize="16sp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp" />
+
         <!-- ============ Регистрационные данные ============ -->
 
         <TextView

@@ -1,22 +1,20 @@
 package com.pmr.admin;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
 import android.media.AudioManager;
-import android.media.AudioRecord;
 import android.media.AudioTrack;
-import android.media.MediaRecorder;
 
-/* Звуковой движок Admin PMR V4.1.
+/* Звуковой движок Admin PMR V4.4.
  *
- * Изменения V4.1:
- *   - массив AudioTrack расширен с 20 до 40:
- *       0..19  — 16 кГц
- *       20..39 — 8 кГц
- *   - убрано ограничение client < 10. Теперь сервер может прислать
- *     client в диапазоне 0..19 — все воспроизводится.
- *   - причина: сервер выдаёт client (i) из chanList как 0..N,
- *     где N доходит до 17. Всё, что >= 10, ранее отсеивалось.
+ * Архитектура — повтор C-логики из pmr.c (SetSound / GetSound):
+ *   - кольцевой буфер из 100 пакетов (2 секунды);
+ *   - udpLoop только кладёт пакеты в буфер, воспроизведение в отдельном потоке;
+ *   - порог запуска — 2 пакета (40 мс), как Uprevdenie=1 в C;
+ *   - буфер AudioTrack = 2560 байт (80 мс), как BUF_FRAMES * 4 в C;
+ *   - при отсутствии данных — короткий пакет (1/8), чтобы быстро освободить буфер.
  */
 public class AudioEngine {
 
@@ -29,334 +27,348 @@ public class AudioEngine {
 
     private static final int SAMPLE_RATE_16K = 16000;
     private static final int SAMPLE_RATE_8K  = 8000;
-    private static final int BUF_ELEMENTS    = 320;
-    private static final int BYTES_PER_ELEM  = 2;
-
-    /* Слотов на каждый формат: 20. Всего: 40. */
-    private static final int SLOTS_PER_FORMAT = 20;
-    private static final int OFFSET_8K = 20;
-
-    /* +70% к базовой громкости. */
     private static final float VOLUME_BOOST = 1.7f;
+    private static final double RMS_DIVISOR = 25.0;
+
+    private static final int onUsilDin = 1;
+    private static final double DinUsildouble = 0.4;
+
+    /* Кольцевой буфер — 100 пакетов (как KOLSTRUCT_MAX_WAVE_OUT в C). */
+    private static final int RING_SIZE = 100;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
 
-    /* 0..19  — 16 кГц (client 0..19)
-     * 20..39 — 8 кГц  (client 0..19) */
-    private AudioTrack[] tracks = new AudioTrack[40];
-    private AudioRecord recorder = null;
-    private Thread recorderThread = null;
-    private volatile boolean isRecording = false;
+    /* Кольцевой буфер PCM 16 бит, моно. */
+    private final byte[][] ringBuf = new byte[RING_SIZE][];
+    private final int[] ringClient = new int[RING_SIZE];
+    private final int[] ringRate = new int[RING_SIZE];
+    private volatile int writeIdx = 0;
+    private volatile int readIdx = 0;
+    private volatile int ringCount = 0;
+    private final Object ringLock = new Object();
+
+    /* Текущий активный клиент. */
+    private volatile int activeClient = -1;
+
+    /* Поток воспроизведения. */
+    private Thread playThread = null;
+    private volatile boolean running = false;
+    private AudioTrack track = null;
+    private int trackClient = -1;
+    private int trackRate = 0;
+
+    private volatile boolean diagEnabled = true;
+    private volatile int lastRxRms = 0;
     private volatile boolean isPlaying = false;
 
-    private volatile int rej = CMD_G711_16K;
+    /* Метрики. */
+    private int totalPlayed = 0;
+    private int underrunCount = 0;
+    private int droppedCount = 0;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
         this.pmrSocket = sock;
     }
 
-    public void setRej(int r) { this.rej = r; }
-    public int  getRej()      { return rej; }
-    public boolean isRecording() { return isRecording; }
-    public boolean isPlaying()   { return isPlaying; }
-
-    public boolean isDuplex() { return true; }
-
-    /* ====================== ВОСПРОИЗВЕДЕНИЕ ====================== */
+    public boolean isPlaying() { return isPlaying; }
+    public int getLastRxRms()  { return lastRxRms; }
 
     public void startPlaying() {
         if (isPlaying) return;
 
-        /* 16 кГц — слоты 0..19 */
-        for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
-            if (tracks[i] == null) {
-                tracks[i] = new AudioTrack(
-                        AudioManager.STREAM_MUSIC,
-                        SAMPLE_RATE_16K,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT,
-                        AudioTrack.getMinBufferSize(SAMPLE_RATE_16K,
-                                AudioFormat.CHANNEL_OUT_MONO,
-                                AudioFormat.ENCODING_PCM_16BIT),
-                        AudioTrack.MODE_STREAM);
-                try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
-            }
-        }
-        /* 8 кГц — слоты 20..39 */
-        for (int i = OFFSET_8K; i < OFFSET_8K + SLOTS_PER_FORMAT; i++) {
-            if (tracks[i] == null) {
-                tracks[i] = new AudioTrack(
-                        AudioManager.STREAM_MUSIC,
-                        SAMPLE_RATE_8K,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT,
-                        AudioTrack.getMinBufferSize(SAMPLE_RATE_8K,
-                                AudioFormat.CHANNEL_OUT_MONO,
-                                AudioFormat.ENCODING_PCM_16BIT),
-                        AudioTrack.MODE_STREAM);
-                try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
-            }
-        }
+        SharedPreferences sp = appCtx.getSharedPreferences(
+                PasswordActivity.PREFS, Context.MODE_PRIVATE);
+        diagEnabled = sp.getBoolean(PasswordActivity.KEY_DIAG_ENABLED,
+                PasswordActivity.DEFAULT_DIAG_ENABLED);
+
+        logCurrentAudioDevice("AudioEngine");
+        AppLog.add("AudioEngine: использование " +
+                (isUsbPresent() ? "USB-аудио" : "встроенного динамика"));
+
+        running = true;
         isPlaying = true;
-        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST
-                + ", slots=" + tracks.length);
+
+        playThread = new Thread(this::playLoop, "pmr-play");
+        playThread.start();
+
+        AppLog.add("AudioEngine: startPlaying, diag=" + diagEnabled
+                + ", ringSize=" + RING_SIZE);
     }
 
     public void stopPlaying() {
+        running = false;
         isPlaying = false;
-        for (int i = 0; i < tracks.length; i++) {
-            if (tracks[i] != null) {
+        releaseTrack();
+        playThread = null;
+    }
+
+    private void releaseTrack() {
+        if (track != null) {
+            try {
+                track.flush();
+                track.stop();
+                track.release();
+            } catch (Exception ignored) {}
+            track = null;
+        }
+        trackClient = -1;
+        trackRate = 0;
+    }
+
+    /* Создать AudioTrack: буфер = 2560 байт (80 мс при 16 кГц), как в C. */
+    private void ensureTrack(int client, int rate) {
+        if (track != null && trackClient == client && trackRate == rate) {
+            return;
+        }
+        releaseTrack();
+        int minBuf = AudioTrack.getMinBufferSize(rate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        int bufSize = 2560;   // 80 мс для 16 кГц моно 16 бит — как BUF_FRAMES*4 в C
+        if (bufSize < minBuf) bufSize = minBuf;
+        track = new AudioTrack(
+                AudioManager.STREAM_MUSIC,
+                rate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufSize,
+                AudioTrack.MODE_STREAM);
+        try { track.setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
+        track.play();
+        trackClient = client;
+        trackRate = rate;
+        AppLog.add("AudioEngine: created AudioTrack client=" + client
+                + ", rate=" + rate + ", minBuf=" + minBuf
+                + ", bufSize=" + bufSize);
+    }
+
+    /* Поток воспроизведения — как SetSound в C. */
+    private void playLoop() {
+        byte[] shortSilence = new byte[320];   // BUF_FRAMES / 8
+        int startThreshold = 2;                 // Uprevdenie + 1 = 2
+        int currentClient = -1;
+        int currentRate = 0;
+
+        int diagTick = 0;
+        int checkTick = 0;
+
+        while (running) {
+            int count;
+            synchronized (ringLock) { count = ringCount; }
+
+            /* Пока буфера меньше порога — ждём, не начинаем play. */
+            if (currentClient == -1) {
+                if (count < startThreshold) {
+                    try { Thread.sleep(5); } catch (InterruptedException ignored) {}
+                    checkTick++;
+                    if (diagEnabled && checkTick >= 200) {
+                        AppLog.add("AudioEngine: waiting, ringCount=" + count);
+                        checkTick = 0;
+                    }
+                    continue;
+                }
+                /* Берём пакет — определяем client и rate. */
+                synchronized (ringLock) {
+                    if (ringCount > 0) {
+                        currentClient = ringClient[readIdx];
+                        currentRate = ringRate[readIdx];
+                    }
+                }
+                ensureTrack(currentClient, currentRate);
+            }
+
+            /* Читаем пакет из буфера. */
+            byte[] pcm = null;
+            int pcmClient = -1;
+            int pcmRate = 0;
+            synchronized (ringLock) {
+                if (ringCount > 0) {
+                    pcm = ringBuf[readIdx];
+                    pcmClient = ringClient[readIdx];
+                    pcmRate = ringRate[readIdx];
+                    ringBuf[readIdx] = null;
+                    readIdx = (readIdx + 1) % RING_SIZE;
+                    ringCount--;
+                }
+            }
+
+            /* Пакет есть — пишем в AudioTrack. */
+            if (pcm != null) {
+                if (pcmClient != currentClient || pcmRate != currentRate) {
+                    /* Сменился клиент — пересоздаём AudioTrack. */
+                    currentClient = pcmClient;
+                    currentRate = pcmRate;
+                    ensureTrack(currentClient, currentRate);
+                }
                 try {
-                    tracks[i].flush();
-                    tracks[i].stop();
-                    tracks[i].release();
-                } catch (Exception ignored) {}
-                tracks[i] = null;
+                    track.write(pcm, 0, pcm.length);
+                    totalPlayed++;
+                } catch (Exception e) {
+                    droppedCount++;
+                    if (diagEnabled) AppLog.add("AudioEngine: write fail=" + e);
+                }
+            } else {
+                /* Пакетов нет — пишем короткий пакет тишины (BUF_FRAMES/8),
+                 * чтобы звуковая карта быстрее освободила буфер. */
+                if (track != null) {
+                    try {
+                        track.write(shortSilence, 0, shortSilence.length);
+                        underrunCount++;
+                    } catch (Exception ignored) {}
+                }
+                try { Thread.sleep(5); } catch (InterruptedException ignored) {}
             }
+
+            /* Диагностика раз в секунду. */
+            if (diagEnabled) {
+                diagTick++;
+                if (diagTick >= 100) {
+                    int state = 0, head = 0, buf = 0;
+                    if (track != null) {
+                        try {
+                            state = track.getPlayState();
+                            head = track.getPlaybackHeadPosition();
+                            buf = track.getBufferSizeInFrames();
+                        } catch (Exception ignored) {}
+                    }
+                    int lag = (buf > 0 && head > 0) ? (buf - head) / 16 : 0;
+                    int rc;
+                    synchronized (ringLock) { rc = ringCount; }
+                    AppLog.add("AudioEngine: client=" + currentClient
+                            + ", state=" + state
+                            + ", head=" + head
+                            + ", bufSize=" + buf
+                            + ", lag=" + lag + "ms"
+                            + ", ring=" + rc
+                            + ", underrun=" + underrunCount
+                            + ", dropped=" + droppedCount
+                            + ", played=" + totalPlayed);
+                    diagTick = 0;
+                }
+            }
+        }
+
+        releaseTrack();
+    }
+
+    /* Положить пакет в кольцевой буфер. */
+    private void push(byte[] pcm, int client, int rate) {
+        synchronized (ringLock) {
+            if (ringCount >= RING_SIZE) {
+                /* Буфер переполнен — сдвигаем readIdx (теряем старый пакет). */
+                ringBuf[readIdx] = null;
+                readIdx = (readIdx + 1) % RING_SIZE;
+                ringCount--;
+                droppedCount++;
+            }
+            ringBuf[writeIdx] = pcm;
+            ringClient[writeIdx] = client;
+            ringRate[writeIdx] = rate;
+            writeIdx = (writeIdx + 1) % RING_SIZE;
+            ringCount++;
+            activeClient = client;
         }
     }
 
-    public void playall() {
-        for (int i = 0; i < tracks.length; i++) {
-            if (tracks[i] != null && tracks[i].getState() == AudioTrack.STATE_INITIALIZED) {
-                try { tracks[i].play(); } catch (Exception ignored) {}
+    private boolean isUsbPresent() {
+        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return false;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo d : devs) {
+            int t = d.getType();
+            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
+                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
+                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
+                return true;
             }
+        }
+        return false;
+    }
+
+    private void logCurrentAudioDevice(String tag) {
+        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo d : devs) {
+            CharSequence pn = d.getProductName();
+            String name = (pn != null) ? pn.toString() : "?";
+            AppLog.add(tag + ": output device type=" + d.getType()
+                    + ", name=" + name);
         }
     }
 
-    public void pauseall() {
-        for (int i = 0; i < tracks.length; i++) {
-            if (tracks[i] != null && tracks[i].getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
-                try {
-                    tracks[i].pause();
-                    tracks[i].flush();
-                } catch (Exception ignored) {}
-            }
+    private void updateRxRms(byte[] pcm, int len) {
+        long sum = 0;
+        int n = len / 2;
+        for (int i = 0; i < n; i++) {
+            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
+            sum += (long) s * s;
         }
-    }
-
-    /* Проверка корректного диапазона client для 16 кГц. */
-    private boolean isValid16(int client) {
-        return client >= 0 && client < SLOTS_PER_FORMAT;
-    }
-
-    /* Проверка корректного диапазона client для 8 кГц. */
-    private boolean isValid8(int client) {
-        return client >= 0 && client < SLOTS_PER_FORMAT;
+        if (n == 0) { lastRxRms = 0; return; }
+        double mean = (double) sum / n;
+        double rms = Math.sqrt(mean);
+        double usil = (onUsilDin != 0) ? DinUsildouble : 1.0;
+        int scaled = (int) ((rms * usil) / RMS_DIVISOR);
+        if (scaled > 1000) scaled = 1000;
+        lastRxRms = scaled;
     }
 
     public void playG711_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || !isValid16(client)) return;
-        if (tracks[client] == null) return;
+        if (!isPlaying) return;
         byte[] pcm = new byte[640];
         g711.decode(buf, 4, 320, pcm);
-        try {
-            tracks[client].write(pcm, 0, 640);
-            if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client].play();
-            }
-        } catch (Exception ignored) {}
+        updateRxRms(pcm, 640);
+        push(pcm, client, SAMPLE_RATE_16K);
     }
 
     public void playG711_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || !isValid8(client)) return;
-        int slot = client + OFFSET_8K;
-        if (tracks[slot] == null) return;
+        if (!isPlaying) return;
         byte[] pcm = new byte[320];
         g711.decode(buf, 4, 160, pcm);
-        try {
-            tracks[slot].write(pcm, 0, 320);
-            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[slot].play();
-            }
-        } catch (Exception ignored) {}
+        updateRxRms(pcm, 320);
+        push(pcm, client + 10, SAMPLE_RATE_8K);
     }
 
     public void playPCM16_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || !isValid16(client)) return;
-        if (tracks[client] == null) return;
-        try {
-            tracks[client].write(buf, 4, 640);
-            if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client].play();
-            }
-        } catch (Exception ignored) {}
+        if (!isPlaying) return;
+        byte[] pcm = new byte[640];
+        System.arraycopy(buf, 4, pcm, 0, 640);
+        updateRxRms(pcm, 640);
+        push(pcm, client, SAMPLE_RATE_16K);
     }
 
     public void playPCM16_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || !isValid8(client)) return;
-        int slot = client + OFFSET_8K;
-        if (tracks[slot] == null) return;
-        try {
-            tracks[slot].write(buf, 4, 320);
-            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[slot].play();
-            }
-        } catch (Exception ignored) {}
+        if (!isPlaying) return;
+        byte[] pcm = new byte[320];
+        System.arraycopy(buf, 4, pcm, 0, 320);
+        updateRxRms(pcm, 320);
+        push(pcm, client + 10, SAMPLE_RATE_8K);
     }
 
     public void playPCM8_16k(int client, byte[] buf, int len) {
-        if (!isPlaying || !isValid16(client)) return;
-        if (tracks[client] == null) return;
+        if (!isPlaying) return;
         short[] pcm = new short[320];
         for (int i = 4; i < 324; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
         }
         byte[] out = short2byte(pcm);
-        try {
-            tracks[client].write(out, 0, 640);
-            if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client].play();
-            }
-        } catch (Exception ignored) {}
+        updateRxRms(out, 640);
+        push(out, client, SAMPLE_RATE_16K);
     }
 
     public void playPCM8_8k(int client, byte[] buf, int len) {
-        if (!isPlaying || !isValid8(client)) return;
-        int slot = client + OFFSET_8K;
-        if (tracks[slot] == null) return;
+        if (!isPlaying) return;
         short[] pcm = new short[160];
         for (int i = 4; i < 164; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
         }
         byte[] out = short2byte(pcm);
-        try {
-            tracks[slot].write(out, 0, 320);
-            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[slot].play();
-            }
-        } catch (Exception ignored) {}
+        updateRxRms(out, 320);
+        push(out, client + 10, SAMPLE_RATE_8K);
     }
-
-    /* ========================== ЗАПИСЬ ========================== */
-
-    public void startRecording() {
-        if (isRecording) return;
-
-        int sampleRate;
-        int bufSize;
-        if (rej == CMD_G711_16K || rej == CMD_PCM16_16K || rej == CMD_PCM8_16K) {
-            sampleRate = SAMPLE_RATE_16K;
-            bufSize = BUF_ELEMENTS * BYTES_PER_ELEM;
-        } else {
-            sampleRate = SAMPLE_RATE_8K;
-            bufSize = BUF_ELEMENTS * BYTES_PER_ELEM / 2;
-        }
-
-        try {
-            recorder = new AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    sampleRate,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    bufSize * 2);
-            recorder.startRecording();
-            isRecording = true;
-
-            recorderThread = new Thread(() -> recordLoop(sampleRate), "pmr-rec");
-            recorderThread.start();
-
-            AppLog.add("AudioEngine: запись стартовала, rate=" + sampleRate
-                    + ", rej=" + rej);
-        } catch (Exception e) {
-            AppLog.add("AudioEngine: ошибка записи — " + e);
-        }
-    }
-
-    public void stopRecording() {
-        isRecording = false;
-        if (recorder != null) {
-            try {
-                recorder.stop();
-                recorder.release();
-            } catch (Exception ignored) {}
-            recorder = null;
-        }
-        recorderThread = null;
-        AppLog.add("AudioEngine: запись остановлена");
-    }
-
-    private void recordLoop(int sampleRate) {
-        byte[] pcm16 = new byte[BUF_ELEMENTS * BYTES_PER_ELEM];
-        byte[] g711buf = new byte[BUF_ELEMENTS];
-
-        while (isRecording) {
-            int read;
-            try {
-                read = recorder.read(pcm16, 0, pcm16.length);
-            } catch (Exception e) {
-                break;
-            }
-            if (read <= 0) continue;
-
-            int cmd;
-            int payloadLen;
-            byte[] payload;
-
-            if (rej == CMD_G711_16K) {
-                cmd = CMD_G711_16K;
-                g711.encode(pcm16, 0, read, g711buf);
-                payloadLen = read / 2;
-                payload = new byte[payloadLen];
-                System.arraycopy(g711buf, 0, payload, 0, payloadLen);
-            } else if (rej == CMD_PCM16_16K) {
-                cmd = CMD_PCM16_16K;
-                payloadLen = read;
-                payload = new byte[payloadLen];
-                System.arraycopy(pcm16, 0, payload, 0, payloadLen);
-            } else if (rej == CMD_PCM16_8K) {
-                cmd = CMD_PCM16_8K;
-                payloadLen = read;
-                payload = new byte[payloadLen];
-                System.arraycopy(pcm16, 0, payload, 0, payloadLen);
-            } else if (rej == CMD_PCM8_16K) {
-                cmd = CMD_PCM8_16K;
-                short[] s = byte2short(pcm16);
-                payloadLen = s.length;
-                payload = new byte[payloadLen];
-                for (int i = 0; i < s.length; i++) {
-                    payload[i] = (byte) (s[i] / 256);
-                }
-            } else if (rej == CMD_G711_8K) {
-                cmd = CMD_G711_8K;
-                g711.encode(pcm16, 0, read, g711buf);
-                payloadLen = read / 2;
-                payload = new byte[payloadLen];
-                System.arraycopy(g711buf, 0, payload, 0, payloadLen);
-            } else {
-                continue;
-            }
-
-            /* Резервный пакет 326 байт:
-             * [cmd][kanal=0][client_lo][client_hi][secret_lo][secret_hi][payload] */
-            int secret = (pmrSocket != null) ? pmrSocket.getKanalSecretInstance() : 0;
-            byte[] packet = new byte[6 + payloadLen];
-            packet[0] = (byte) cmd;
-            packet[1] = 0;
-            packet[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
-            packet[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-            packet[4] = (byte) (secret & 0xFF);
-            packet[5] = (byte) ((secret >> 8) & 0xFF);
-            System.arraycopy(payload, 0, packet, 6, payloadLen);
-
-            /* Основной пакет 324 байта — без secret, как в C-коде. */
-            byte[] mainPacket = new byte[4 + payloadLen];
-            mainPacket[0] = (byte) cmd;
-            mainPacket[1] = 0;
-            mainPacket[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
-            mainPacket[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-            System.arraycopy(payload, 0, mainPacket, 4, payloadLen);
-
-            if (pmrSocket != null) {
-                pmrSocket.sendVoice(mainPacket, packet);
-            }
-        }
-    }
-
-    /* ========================== УТИЛИТЫ ========================== */
 
     private static byte[] short2byte(short[] sArr) {
         int length = sArr.length;
@@ -367,13 +379,5 @@ public class AudioEngine {
             bArr[i2 + 1] = (byte) (sArr[i] >> 8);
         }
         return bArr;
-    }
-
-    private static short[] byte2short(byte[] b) {
-        short[] s = new short[b.length / 2];
-        for (int i = 0; i < s.length; i++) {
-            s[i] = (short) ((b[i * 2] & 255) | (b[i * 2 + 1] << 8));
-        }
-        return s;
     }
 }

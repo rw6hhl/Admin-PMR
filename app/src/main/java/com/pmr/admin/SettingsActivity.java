@@ -1,22 +1,32 @@
 package com.pmr.admin;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран настроек Admin PMR V4.2.
+import java.io.File;
+import java.io.InputStream;
+
+/* Экран настроек Admin PMR V4.4.
  *
- * Изменения V4.2:
- *   - убран блок «Порт приёма UDP» (port_prm перенесён в регистрационные);
- *   - убран ip_server2;
- *   - добавлены PORT_prm (26431) и PORT_prd (16000).
+ * Изменения V4.4:
+ *   - галочка «Расширенная диагностика» (KEY_DIAG_ENABLED);
+ *   - RadioGroup источника списка: server / local (KEY_LIST_SOURCE);
+ *   - кнопка «ЗАГРУЗИТЬ list.txt» (btnLoadList);
+ *   - PORT_prm и PORT_prd в регистрационных.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -25,8 +35,13 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText passConfirm;
     private CheckBox requirePassBox;
     private CheckBox checkSystemBox;
+    private CheckBox diagBox;
+    private RadioGroup listSourceGroup;
+    private RadioButton radioServer;
+    private RadioButton radioLocal;
     private Button btn26;
     private Button btnOpenLog;
+    private Button btnLoadList;
 
     private EditText regMailIndex;
     private EditText regPChannel;
@@ -36,6 +51,8 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regPortPrd;
     private EditText regCallsign;
     private EditText regCity;
+
+    private ActivityResultLauncher<String[]> filePicker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,8 +66,13 @@ public class SettingsActivity extends AppCompatActivity {
         passConfirm  = findViewById(R.id.passConfirm);
         requirePassBox = findViewById(R.id.requirePassBox);
         checkSystemBox = findViewById(R.id.checkSystemBox);
+        diagBox      = findViewById(R.id.diagBox);
+        listSourceGroup = findViewById(R.id.listSourceGroup);
+        radioServer  = findViewById(R.id.radioListServer);
+        radioLocal   = findViewById(R.id.radioListLocal);
         btn26 = findViewById(R.id.btn26);
         btnOpenLog = findViewById(R.id.btnOpenLog);
+        btnLoadList = findViewById(R.id.btnLoadList);
 
         regMailIndex = findViewById(R.id.regMailIndex);
         regPChannel  = findViewById(R.id.regPChannel);
@@ -71,15 +93,51 @@ public class SettingsActivity extends AppCompatActivity {
             startActivity(i);
         });
 
+        filePicker = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri -> {
+                    if (uri != null) applyListFile(uri);
+                });
+
+        if (btnLoadList != null) {
+            btnLoadList.setOnClickListener(v ->
+                    filePicker.launch(new String[]{"text/plain", "*/*"}));
+        }
+
         loadSettings();
+    }
+
+    /* Применить выбранный list.txt. */
+    private void applyListFile(Uri uri) {
+        try {
+            InputStream is = getContentResolver().openInputStream(uri);
+            if (is == null) {
+                Toast.makeText(this, R.string.toast_list_error,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            int n = PmrService.listFile.loadFromStream(is);
+            is.close();
+
+            File dest = new File(getFilesDir(), "list.txt");
+            PmrService.listFile.save(dest);
+
+            if (PmrService.chanList != null) PmrService.chanList.clear();
+
+            Toast.makeText(this,
+                    getString(R.string.toast_list_loaded, n),
+                    Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            AppLog.add("applyListFile error: " + e);
+            Toast.makeText(this, R.string.toast_list_error,
+                    Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void loadSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
-        int r = sp.getInt(PasswordActivity.KEY_REFRESH,
-                PasswordActivity.DEFAULT_REFRESH);
         boolean requirePass = sp.getBoolean(
                 PasswordActivity.KEY_REQUIRE_PASSWORD, true);
         if (requirePassBox != null) requirePassBox.setChecked(requirePass);
@@ -87,6 +145,18 @@ public class SettingsActivity extends AppCompatActivity {
         boolean checkSystem = sp.getBoolean(
                 PasswordActivity.KEY_CHECK_SYSTEM, true);
         if (checkSystemBox != null) checkSystemBox.setChecked(checkSystem);
+
+        boolean diag = sp.getBoolean(PasswordActivity.KEY_DIAG_ENABLED,
+                PasswordActivity.DEFAULT_DIAG_ENABLED);
+        if (diagBox != null) diagBox.setChecked(diag);
+
+        String src = sp.getString(PasswordActivity.KEY_LIST_SOURCE,
+                PasswordActivity.DEFAULT_LIST_SOURCE);
+        if ("local".equals(src)) {
+            if (radioLocal != null) radioLocal.setChecked(true);
+        } else {
+            if (radioServer != null) radioServer.setChecked(true);
+        }
 
         boolean on26 = sp.getBoolean(PasswordActivity.KEY_26_STATE, false);
         updateBtn26(on26);
@@ -168,6 +238,13 @@ public class SettingsActivity extends AppCompatActivity {
         boolean checkSystem = checkSystemBox != null && checkSystemBox.isChecked();
         sp.edit().putBoolean(PasswordActivity.KEY_CHECK_SYSTEM,
                 checkSystem).apply();
+
+        boolean diag = diagBox != null && diagBox.isChecked();
+        sp.edit().putBoolean(PasswordActivity.KEY_DIAG_ENABLED, diag).apply();
+
+        String src = "server";
+        if (radioLocal != null && radioLocal.isChecked()) src = "local";
+        sp.edit().putString(PasswordActivity.KEY_LIST_SOURCE, src).apply();
 
         String cur = sp.getString(PasswordActivity.KEY_PASSWORD,
                 PasswordActivity.DEFAULT_PASSWORD);
