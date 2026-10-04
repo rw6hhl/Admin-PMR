@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Admin PMR</string>
-    <string name="app_version">V4.3</string>
+    <string name="app_version">V4.5</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>

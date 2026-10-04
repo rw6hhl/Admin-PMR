@@ -1,6 +1,5 @@
 package com.pmr.admin;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -20,14 +19,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек Admin PMR V4.4.
- *
- * Изменения V4.4:
- *   - галочка «Расширенная диагностика» (KEY_DIAG_ENABLED);
- *   - RadioGroup источника списка: server / local (KEY_LIST_SOURCE);
- *   - кнопка «ЗАГРУЗИТЬ list.txt» (btnLoadList);
- *   - PORT_prm и PORT_prd в регистрационных.
- */
+/* Экран настроек Admin PMR V4.5. */
 public class SettingsActivity extends AppCompatActivity {
 
     private EditText passCurrent;
@@ -49,6 +41,7 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regIpServer;
     private EditText regPortPrm;
     private EditText regPortPrd;
+    private EditText regMicGain;
     private EditText regCallsign;
     private EditText regCity;
 
@@ -80,6 +73,7 @@ public class SettingsActivity extends AppCompatActivity {
         regIpServer  = findViewById(R.id.regIpServer);
         regPortPrm   = findViewById(R.id.regPortPrm);
         regPortPrd   = findViewById(R.id.regPortPrd);
+        regMicGain   = findViewById(R.id.regMicGain);
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
 
@@ -107,7 +101,6 @@ public class SettingsActivity extends AppCompatActivity {
         loadSettings();
     }
 
-    /* Применить выбранный list.txt. */
     private void applyListFile(Uri uri) {
         try {
             InputStream is = getContentResolver().openInputStream(uri);
@@ -185,6 +178,10 @@ public class SettingsActivity extends AppCompatActivity {
             regPortPrd.setText(String.valueOf(sp.getInt(
                     PasswordActivity.KEY_PORT_PRD,
                     PasswordActivity.DEFAULT_PORT_PRD)));
+        if (regMicGain != null)
+            regMicGain.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_MIC_GAIN,
+                    PasswordActivity.DEFAULT_MIC_GAIN)));
         if (regCallsign != null)
             regCallsign.setText(sp.getString(
                     PasswordActivity.KEY_CALLSIGN,
@@ -283,6 +280,8 @@ public class SettingsActivity extends AppCompatActivity {
                 ? regPortPrm.getText().toString().trim() : "";
         String portPrdStr = (regPortPrd != null)
                 ? regPortPrd.getText().toString().trim() : "";
+        String micGainStr = (regMicGain != null)
+                ? regMicGain.getText().toString().trim() : "";
         String callsign = (regCallsign != null)
                 ? regCallsign.getText().toString().trim() : "";
         String city = (regCity != null)
@@ -327,6 +326,14 @@ public class SettingsActivity extends AppCompatActivity {
                         Toast.LENGTH_SHORT).show();
                 return;
             }
+        }
+        if (!micGainStr.isEmpty()) {
+            try {
+                int v = Integer.parseInt(micGainStr);
+                if (v < 0) v = 0;
+                if (v > 100) v = 100;
+                sp.edit().putInt(PasswordActivity.KEY_MIC_GAIN, v).apply();
+            } catch (NumberFormatException ignored) {}
         }
         if (!callsign.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CALLSIGN, callsign).apply();

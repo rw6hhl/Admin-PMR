@@ -10,14 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Admin PMR V4.2.
+/* Экран ввода пароля Admin PMR V4.5.
  *
- * Изменения V4.2:
- *   - один IP: KEY_IP_SERVER (185.221.154.39);
- *   - убран KEY_IP_SERVER2;
- *   - KEY_PORT_PRM = "port_prm", DEFAULT_PORT_PRM = 5323;
- *   - KEY_PORT_PRD = "port_prd", DEFAULT_PORT_PRD = 16000;
- *   - DEFAULT_PRIZNAK_PMR = "26000".
+ * Изменения V4.5:
+ *   - KEY_MIC_GAIN = "mic_gain" (0..100, дефолт 50);
+ *   - VOX отключён — запись только по PTT.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -37,6 +34,12 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_CALLSIGN      = "callsign";
     public static final String KEY_CITY          = "city";
 
+    public static final String KEY_LIST_SOURCE   = "list_source";
+    public static final String KEY_DIAG_ENABLED  = "diag_enabled";
+
+    /* V4.5: усиление микрофона. */
+    public static final String KEY_MIC_GAIN      = "mic_gain";
+
     public static final String DEFAULT_PASSWORD = "Rostov2026";
     public static final int    DEFAULT_REFRESH = 2;
     public static final int    DEFAULT_PORT_PRM = 5323;
@@ -48,6 +51,12 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
+
+    public static final String DEFAULT_LIST_SOURCE  = "server";
+    public static final boolean DEFAULT_DIAG_ENABLED = true;
+
+    /* 0..100, 50 = 1.0x */
+    public static final int    DEFAULT_MIC_GAIN = 50;
 
     private EditText passInput;
 

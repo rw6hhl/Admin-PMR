@@ -73,8 +73,6 @@
             android:textSize="16sp"
             android:checked="true" />
 
-        <!-- ============ Расширенная диагностика ============ -->
-
         <CheckBox
             android:id="@+id/diagBox"
             android:layout_width="match_parent"
@@ -240,6 +238,24 @@
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
             <EditText android:id="@+id/regPortPrd"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="140dp"
+                android:text="Mic  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+            <EditText android:id="@+id/regMicGain"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
