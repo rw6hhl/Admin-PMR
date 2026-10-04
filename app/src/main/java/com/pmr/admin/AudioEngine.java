@@ -9,15 +9,16 @@ import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
 
-/* Звуковой движок Android Link PMR V1.8.
+import java.util.List;
+
+/* Звуковой движок Android Link PMR V1.9.
  *
- * Изменения V1.8:
- *   - чтение Mic и Spk из SharedPreferences;
- *   - VOLUME_BOOST вычисляется из Spk (0..200) → 0.0..4.0;
- *   - onUsilDin = 1, DinUsildouble = 2.0 (как в V4.3);
- *   - onUsilMic = 1, MicUsildouble = 2.0;
- *   - добавлены startRecording() / stopRecording() с усилением Mic;
- *   - полное логирование параметров при старте.
+ * Изменения V1.9:
+ *   - в recLoop() pkt[2..3] = свой client (it.i из chanList по Id == Priznak_pmr),
+ *     а не MyMailIndex — исправлен отвал клиента 26000 при передаче;
+ *   - добавлен метод getMyClient() для поиска своего номера в канале.
+ *   - всё остальное как в V1.8: усиление (onUsilDin=1, DinUsildouble=2.0,
+ *     onUsilMic=1, MicUsildouble=2.0), Mic/Spk из SharedPreferences.
  */
 public class AudioEngine {
 
@@ -84,6 +85,18 @@ public class AudioEngine {
     public int getLastRxRms()  { return lastRxRms; }
     public int getMicGain()    { return micGain; }
     public int getSpkGain()    { return spkGain; }
+
+    /* Поиск своего номера в канале по Id == Priznak_pmr.
+     * Возвращает it.i, если найден; иначе 0. */
+    private int getMyClient() {
+        if (pmrSocket == null) return 0;
+        if (PmrService.chanList == null) return 0;
+        List<ChanList.Item> items = PmrService.chanList.snapshot();
+        for (ChanList.Item it : items) {
+            if (it.Id == PmrSocket.Priznak_pmr) return it.i;
+        }
+        return 0;
+    }
 
     public void startPlaying() {
         if (isPlaying) return;
@@ -213,12 +226,15 @@ public class AudioEngine {
             int rms = calcRms(pcm, n);
             g711.encode(pcm, 0, n, ulaw);
 
-            /* Формирование пакета cmd=22. */
+            /* Формирование пакета cmd=22.
+             * pkt[1]    = канал (MyPChannel)
+             * pkt[2..3] = свой client (it.i из chanList по Id == Priznak_pmr) */
+            int myClient = getMyClient();
             byte[] pkt = new byte[324];
             pkt[0] = (byte) CMD_G711_16K;
             pkt[1] = (byte) (PmrSocket.MyPChannel & 0xFF);
-            pkt[2] = (byte) (PmrSocket.MyMailIndex & 0xFF);
-            pkt[3] = (byte) ((PmrSocket.MyMailIndex >> 8) & 0xFF);
+            pkt[2] = (byte) (myClient & 0xFF);
+            pkt[3] = (byte) ((myClient >> 8) & 0xFF);
             int copy = Math.min(ulaw.length, 320);
             System.arraycopy(ulaw, 0, pkt, 4, copy);
 
@@ -226,7 +242,8 @@ public class AudioEngine {
             totalSent++;
             if (totalSent % 50 == 0) {
                 AppLog.add("AudioEngine: rec rms=" + rms
-                        + ", gain=" + micGain + ", sent=" + totalSent);
+                        + ", gain=" + micGain + ", client=" + myClient
+                        + ", sent=" + totalSent);
             }
         }
     }
