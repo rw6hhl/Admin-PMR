@@ -8,6 +8,8 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -17,12 +19,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек V5.6.
+/* Экран настроек V5.8.
  *
- * Изменения V5.6:
- *   - убрано дублирующее поле «Порт приёма UDP» (portInput);
- *   - «Частота обновления» (refreshInput) перенесена в «Регистрационные данные»;
- *   - Call и QTH перенесены в конец «Регистрационных данных».
+ * Изменения V5.8:
+ *   - возвращён выбор источника списка: «сервер» или «list.txt»;
+ *   - ключ KEY_LIST_SOURCE, значения "server" / "local".
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -36,6 +37,10 @@ public class SettingsActivity extends AppCompatActivity {
     private Button btnOpenLog;
     private Button btnLoadList;
     private Button btnUpdateCheck;
+
+    private RadioGroup listSourceGroup;
+    private RadioButton radioServer;
+    private RadioButton radioLocal;
 
     private EditText regMailIndex;
     private EditText regPChannel;
@@ -69,6 +74,10 @@ public class SettingsActivity extends AppCompatActivity {
         btnOpenLog = findViewById(R.id.btnOpenLog);
         btnLoadList = findViewById(R.id.btnLoadList);
         btnUpdateCheck = findViewById(R.id.btnUpdateCheck);
+
+        listSourceGroup = findViewById(R.id.listSourceGroup);
+        radioServer = findViewById(R.id.radioListServer);
+        radioLocal  = findViewById(R.id.radioListLocal);
 
         regMailIndex = findViewById(R.id.regMailIndex);
         regPChannel  = findViewById(R.id.regPChannel);
@@ -143,6 +152,14 @@ public class SettingsActivity extends AppCompatActivity {
     private void loadSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
+
+        String src = sp.getString(PasswordActivity.KEY_LIST_SOURCE,
+                PasswordActivity.DEFAULT_LIST_SOURCE);
+        if ("local".equals(src)) {
+            if (radioLocal != null) radioLocal.setChecked(true);
+        } else {
+            if (radioServer != null) radioServer.setChecked(true);
+        }
 
         int r = sp.getInt(PasswordActivity.KEY_REFRESH,
                 PasswordActivity.DEFAULT_REFRESH);
@@ -266,6 +283,10 @@ public class SettingsActivity extends AppCompatActivity {
             }
             sp.edit().putString(PasswordActivity.KEY_PASSWORD, newPass).apply();
         }
+
+        String src = "server";
+        if (radioLocal != null && radioLocal.isChecked()) src = "local";
+        sp.edit().putString(PasswordActivity.KEY_LIST_SOURCE, src).apply();
 
         int refresh = PasswordActivity.DEFAULT_REFRESH;
         try {

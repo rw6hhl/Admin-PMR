@@ -21,7 +21,38 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="20dp"
+            android:text="Источник списка абонентов"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/listSourceGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/radioListServer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="С сервера PMR"
+                android:textSize="16sp"
+                android:checked="true" />
+
+            <RadioButton
+                android:id="@+id/radioListLocal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Из файла list.txt"
+                android:textSize="16sp" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:text="Смена пароля"
             android:textSize="18sp"
             android:textStyle="bold" />
