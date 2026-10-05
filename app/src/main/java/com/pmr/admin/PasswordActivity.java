@@ -10,11 +10,10 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Admin PMR V5.2.
+/* Экран ввода пароля Admin PMR V5.3.
  *
- * Изменения V5.2:
- *   - добавлены KEY_IP_SERVER2 и DEFAULT_IP_SERVER2 (нужны для SettingsActivity);
- *   - изменены дефолты: Priznak_pmr = "00000", MyPChannel = "2".
+ * Изменения V5.3:
+ *   - дефолты: Priznak_pmr = "51953", MyPChannel = "4".
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -47,8 +46,8 @@ public class PasswordActivity extends AppCompatActivity {
     public static final int    DEFAULT_PORT_PRD = 16000;
 
     public static final String DEFAULT_MY_MAIL_INDEX = "51953";
-    public static final String DEFAULT_MY_PCHANNEL   = "2";
-    public static final String DEFAULT_PRIZNAK_PMR   = "00000";
+    public static final String DEFAULT_MY_PCHANNEL   = "4";
+    public static final String DEFAULT_PRIZNAK_PMR   = "51953";
     public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
     public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
