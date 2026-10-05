@@ -10,10 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Admin PMR V4.7.
+/* Экран ввода пароля Admin PMR V5.2.
  *
- * Изменения V4.7:
- *   - KEY_SPK_GAIN = "spk_gain" (0..100, дефолт 50).
+ * Изменения V5.2:
+ *   - добавлены KEY_IP_SERVER2 и DEFAULT_IP_SERVER2 (нужны для SettingsActivity);
+ *   - изменены дефолты: Priznak_pmr = "00000", MyPChannel = "2".
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -30,6 +31,7 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_MY_PCHANNEL   = "my_pchannel";
     public static final String KEY_PRIZNAK_PMR   = "priznak_pmr";
     public static final String KEY_IP_SERVER     = "ip_server";
+    public static final String KEY_IP_SERVER2    = "ip_server2";
     public static final String KEY_CALLSIGN      = "callsign";
     public static final String KEY_CITY          = "city";
 
@@ -45,9 +47,10 @@ public class PasswordActivity extends AppCompatActivity {
     public static final int    DEFAULT_PORT_PRD = 16000;
 
     public static final String DEFAULT_MY_MAIL_INDEX = "51953";
-    public static final String DEFAULT_MY_PCHANNEL   = "5";
-    public static final String DEFAULT_PRIZNAK_PMR   = "26000";
+    public static final String DEFAULT_MY_PCHANNEL   = "2";
+    public static final String DEFAULT_PRIZNAK_PMR   = "00000";
     public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
+    public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
 
