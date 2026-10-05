@@ -17,10 +17,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек V5.5.
+/* Экран настроек V5.6.
  *
- * Изменения V5.5:
- *   - возвращены поля PORT_prm, PORT_prd, Mic, Spk в «Регистрационные данные».
+ * Изменения V5.6:
+ *   - убрано дублирующее поле «Порт приёма UDP» (portInput);
+ *   - «Частота обновления» (refreshInput) перенесена в «Регистрационные данные»;
+ *   - Call и QTH перенесены в конец «Регистрационных данных».
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -28,7 +30,6 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText passNew;
     private EditText passConfirm;
     private EditText refreshInput;
-    private EditText portInput;
     private CheckBox requirePassBox;
     private CheckBox checkSystemBox;
     private Button btn26;
@@ -62,7 +63,6 @@ public class SettingsActivity extends AppCompatActivity {
         passNew     = findViewById(R.id.passNew);
         passConfirm = findViewById(R.id.passConfirm);
         refreshInput = findViewById(R.id.refreshInput);
-        portInput = findViewById(R.id.portInput);
         requirePassBox = findViewById(R.id.requirePassBox);
         checkSystemBox = findViewById(R.id.checkSystemBox);
         btn26 = findViewById(R.id.btn26);
@@ -147,10 +147,6 @@ public class SettingsActivity extends AppCompatActivity {
         int r = sp.getInt(PasswordActivity.KEY_REFRESH,
                 PasswordActivity.DEFAULT_REFRESH);
         if (refreshInput != null) refreshInput.setText(String.valueOf(r));
-
-        int p = sp.getInt(PasswordActivity.KEY_PORT_PRM,
-                PasswordActivity.DEFAULT_PORT_PRM);
-        if (portInput != null) portInput.setText(String.valueOf(p));
 
         boolean requirePass = sp.getBoolean(
                 PasswordActivity.KEY_REQUIRE_PASSWORD, true);
@@ -289,25 +285,6 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
         sp.edit().putInt(PasswordActivity.KEY_REFRESH, refresh).apply();
-
-        int port = PasswordActivity.DEFAULT_PORT_PRM;
-        try {
-            String ps = portInput.getText().toString().trim();
-            if (!ps.isEmpty()) {
-                int v = Integer.parseInt(ps);
-                if (v >= 1024 && v <= 65535) port = v;
-                else {
-                    Toast.makeText(this, "Порт: 1024..65535",
-                            Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            }
-        } catch (NumberFormatException e) {
-            Toast.makeText(this, "Порт: число",
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
-        sp.edit().putInt(PasswordActivity.KEY_PORT_PRM, port).apply();
 
         boolean requirePass = requirePassBox != null && requirePassBox.isChecked();
         sp.edit().putBoolean(PasswordActivity.KEY_REQUIRE_PASSWORD,
