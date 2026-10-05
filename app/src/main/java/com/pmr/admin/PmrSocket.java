@@ -11,13 +11,13 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V5.9.
+/* UDP-логика PMR V6.0.
  *
- * Изменения V5.9:
- *   - добавлено чтение KEY_LIST_SOURCE из SharedPreferences;
- *   - при list_source="local": запрос cmd=234 не отправляется,
- *     входящие chanList игнорируются;
- *   - при list_source="server": работает как раньше (запрос на сервер).
+ * Изменения V6.0:
+ *   - cmd=234 и cmd=n работают ВСЕГДА, независимо от list_source;
+ *   - поле listSourceLocal остаётся, но на сетевую логику не влияет;
+ *   - возвращена логика V3.2: chanList всегда обновляется с сервера,
+ *     list.txt — только справочник имён.
  */
 public class PmrSocket {
 
@@ -58,7 +58,7 @@ public class PmrSocket {
     private Thread threadTimer;
     private int activeLogTick = 0;
 
-    /* V5.9: если true — список берётся локально, сервер не опрашивается. */
+    /* Информационное поле — на сетевую логику не влияет. */
     private volatile boolean listSourceLocal = false;
 
     private volatile AudioEngine audioEngine;
@@ -86,7 +86,7 @@ public class PmrSocket {
     public static int getKanalSecretStatic() { return 0; }
     public void sendRawPublic(byte[] buf) { sendRaw(buf); }
 
-    /* Чтение list_source из SharedPreferences. */
+    /* Чтение list_source — только для логов. */
     private void reloadListSource() {
         SharedPreferences sp = appCtx.getSharedPreferences(
                 PasswordActivity.PREFS, Context.MODE_PRIVATE);
@@ -290,8 +290,8 @@ public class PmrSocket {
                             break;
                         case 'n':
                             AppLog.addCmd("←", "cmd=n client=" + client);
-                            /* V5.9: список с сервера — только если источник "server". */
-                            if (!listSourceLocal && client != KolInKanal) {
+                            /* V6.0: cmd=234 работает всегда. */
+                            if (client != KolInKanal) {
                                 KolInKanal = client;
                                 sendL();
                             }
@@ -348,14 +348,10 @@ public class PmrSocket {
                             }
                             break;
                         case 234:
-                            /* V5.9: chanList с сервера — только если источник "server". */
-                            if (!listSourceLocal) {
-                                AppLog.addCmd("←", "cmd=234 chanList cnt="
-                                        + ((n - 4) / 13) + " size=" + n);
-                                handleChanList(buf, n);
-                            } else {
-                                AppLog.addCmd("←", "cmd=234 chanList (ignored, local source)");
-                            }
+                            /* V6.0: chanList всегда обновляется с сервера. */
+                            AppLog.addCmd("←", "cmd=234 chanList cnt="
+                                    + ((n - 4) / 13) + " size=" + n);
+                            handleChanList(buf, n);
                             break;
                         case 123:
                             AppLog.addCmd("←", "cmd=123 list.txt size=" + n);
@@ -444,12 +440,8 @@ public class PmrSocket {
         sendRaw(buf);
     }
 
-    /* Публичный запрос списка с сервера — только при источнике "server". */
+    /* V6.0: cmd=234 работает всегда. */
     public void sendL() {
-        if (listSourceLocal) {
-            AppLog.addCmd("→", "cmd=234 list (skipped, local source)");
-            return;
-        }
         new Thread(() -> {
             AppLog.addCmd("→", "cmd=234 list kanal=13 port="
                     + (port_prd + kanal_PRD));
