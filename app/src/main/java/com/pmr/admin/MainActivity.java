@@ -20,11 +20,10 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/* Главный экран V5.7.
+/* Главный экран V5.9.
  *
- * Изменения V5.7:
- *   - возвращена кнопка «ОБНОВИТЬ СПИСОК» (btnRefreshList);
- *   - обработчик отправляет cmd=234 list на сервер.
+ * Изменения V5.9:
+ *   - кнопка «ОБНОВИТЬ СПИСОК» учитывает источник списка (server / local).
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -66,6 +65,11 @@ public class MainActivity extends AppCompatActivity {
                 if (!PmrService.pmrSocket.isRunning()) {
                     Toast.makeText(MainActivity.this,
                             R.string.toast_ban_not_running, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (PmrService.pmrSocket.isListSourceLocal()) {
+                    Toast.makeText(MainActivity.this,
+                            "Источник: локальный list.txt", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 PmrService.pmrSocket.sendL();

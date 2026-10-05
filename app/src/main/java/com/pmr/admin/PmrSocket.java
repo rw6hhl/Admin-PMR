@@ -11,11 +11,13 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V4.3.1.
+/* UDP-логика PMR V5.9.
  *
- * Изменения V4.3.1:
- *   - sendVoice() возвращён к логике V4.2: отправляется только mainPacket
- *     (324 байта) на port_prd + kanal_PRD. reservePacket игнорируется.
+ * Изменения V5.9:
+ *   - добавлено чтение KEY_LIST_SOURCE из SharedPreferences;
+ *   - при list_source="local": запрос cmd=234 не отправляется,
+ *     входящие chanList игнорируются;
+ *   - при list_source="server": работает как раньше (запрос на сервер).
  */
 public class PmrSocket {
 
@@ -27,8 +29,8 @@ public class PmrSocket {
     public static final int PORT_CHECK   = 16013;
 
     public static int MyMailIndex = 51953;
-    public static int MyPChannel  = 5;
-    public static int Priznak_pmr = 26000;
+    public static int MyPChannel  = 4;
+    public static int Priznak_pmr = 00000;
 
     private final ListFile listFile;
     private final ChanList chanList;
@@ -56,6 +58,9 @@ public class PmrSocket {
     private Thread threadTimer;
     private int activeLogTick = 0;
 
+    /* V5.9: если true — список берётся локально, сервер не опрашивается. */
+    private volatile boolean listSourceLocal = false;
+
     private volatile AudioEngine audioEngine;
 
     public PmrSocket(Context ctx,
@@ -81,7 +86,16 @@ public class PmrSocket {
     public static int getKanalSecretStatic() { return 0; }
     public void sendRawPublic(byte[] buf) { sendRaw(buf); }
 
-    /* Голос: только mainPacket (324 байта) на IP_SERVER : port_prd + kanal_PRD. */
+    /* Чтение list_source из SharedPreferences. */
+    private void reloadListSource() {
+        SharedPreferences sp = appCtx.getSharedPreferences(
+                PasswordActivity.PREFS, Context.MODE_PRIVATE);
+        String src = sp.getString(PasswordActivity.KEY_LIST_SOURCE, "server");
+        listSourceLocal = "local".equals(src);
+        AppLog.add("PmrSocket: listSource=" + src);
+    }
+
+    /* Отправка голоса — только mainPacket на основной сервер. */
     public void sendVoice(byte[] mainPacket, byte[] reservePacket) {
         if (mainPacket == null) return;
         DatagramSocket s = sock;
@@ -94,7 +108,6 @@ public class PmrSocket {
         } catch (Exception e) {
             AppLog.add("sendVoice main FAIL: " + e);
         }
-        /* reservePacket игнорируется — как в V4.2. */
     }
 
     public void reloadFromPrefs(Context ctx) {
@@ -130,6 +143,9 @@ public class PmrSocket {
         if (MyPChannel == 0) kanal_PRD = 0;
         else kanal_PRD = ((MyMailIndex & 0xF) * 8) + MyPChannel;
         kanal_Secret = (MyMailIndex & 0xFFFFFFF0) >> 4;
+
+        reloadListSource();
+
         AppLog.add("PmrSocket.reload: mail=" + MyMailIndex
                 + ", ch=" + MyPChannel + ", priznak=" + Priznak_pmr
                 + ", ip=" + IP_SERVER + ", ip2=" + IP_SERVER2
@@ -175,9 +191,14 @@ public class PmrSocket {
         if (MyPChannel == 0) kanal_PRD = 0;
         else kanal_PRD = ((MyMailIndex & 0xF) * 8) + MyPChannel;
         kanal_Secret = (MyMailIndex & 0xFFFFFFF0) >> 4;
+
+        reloadListSource();
+
         AppLog.add("PmrSocket: port_prm=" + port_prm + ", port_prd=" + port_prd
                 + ", kanal=" + kanal_PRD + ", secret=" + kanal_Secret
-                + ", ip1=" + IP_SERVER + ", ip2=" + IP_SERVER2);
+                + ", ip1=" + IP_SERVER + ", ip2=" + IP_SERVER2
+                + ", listSourceLocal=" + listSourceLocal);
+
         running = true;
         threadUdp = new Thread(this::udpLoop, "pmr-udp");
         threadUdp.start();
@@ -235,7 +256,8 @@ public class PmrSocket {
                         + ", server=" + (serverAddr != null)
                         + ", server2=" + (serverAddr2 != null)
                         + ", running=" + running + ", kanal_PRD=" + kanal_PRD
-                        + ", port_prd=" + port_prd);
+                        + ", port_prd=" + port_prd
+                        + ", listSourceLocal=" + listSourceLocal);
                 diag = 0;
             }
             try { Thread.sleep(100); } catch (InterruptedException ignored) {}
@@ -268,7 +290,11 @@ public class PmrSocket {
                             break;
                         case 'n':
                             AppLog.addCmd("←", "cmd=n client=" + client);
-                            if (client != KolInKanal) { KolInKanal = client; sendL(); }
+                            /* V5.9: список с сервера — только если источник "server". */
+                            if (!listSourceLocal && client != KolInKanal) {
+                                KolInKanal = client;
+                                sendL();
+                            }
                             break;
                     }
                 } else {
@@ -322,9 +348,14 @@ public class PmrSocket {
                             }
                             break;
                         case 234:
-                            AppLog.addCmd("←", "cmd=234 chanList cnt="
-                                    + ((n - 4) / 13) + " size=" + n);
-                            handleChanList(buf, n);
+                            /* V5.9: chanList с сервера — только если источник "server". */
+                            if (!listSourceLocal) {
+                                AppLog.addCmd("←", "cmd=234 chanList cnt="
+                                        + ((n - 4) / 13) + " size=" + n);
+                                handleChanList(buf, n);
+                            } else {
+                                AppLog.addCmd("←", "cmd=234 chanList (ignored, local source)");
+                            }
                             break;
                         case 123:
                             AppLog.addCmd("←", "cmd=123 list.txt size=" + n);
@@ -381,7 +412,6 @@ public class PmrSocket {
         }
     }
 
-    /* Служебные пакеты: основной + 2 резерва. */
     private void sendRaw(byte[] buf) {
         DatagramSocket s = sock;
         InetAddress a1 = serverAddr;
@@ -414,13 +444,20 @@ public class PmrSocket {
         sendRaw(buf);
     }
 
+    /* Публичный запрос списка с сервера — только при источнике "server". */
     public void sendL() {
+        if (listSourceLocal) {
+            AppLog.addCmd("→", "cmd=234 list (skipped, local source)");
+            return;
+        }
         new Thread(() -> {
             AppLog.addCmd("→", "cmd=234 list kanal=13 port="
                     + (port_prd + kanal_PRD));
             sendCmdHeader(234, 13, 0);
         }).start();
     }
+
+    public boolean isListSourceLocal() { return listSourceLocal; }
 
     public void sendBan(final int client) {
         new Thread(() -> {
