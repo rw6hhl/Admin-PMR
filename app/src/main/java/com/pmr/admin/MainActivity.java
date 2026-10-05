@@ -12,6 +12,7 @@ import android.view.MotionEvent;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -19,11 +20,11 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/* Главный экран V4.0.
+/* Главный экран V5.7.
  *
- * Изменения V4.0:
- *   - кнопка «ЗАГРУЗИТЬ list.txt» перенесена в «НАСТРОЙКИ»;
- *   - весь код загрузки list.txt удалён (переехал в SettingsActivity).
+ * Изменения V5.7:
+ *   - возвращена кнопка «ОБНОВИТЬ СПИСОК» (btnRefreshList);
+ *   - обработчик отправляет cmd=234 list на сервер.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -36,6 +37,7 @@ public class MainActivity extends AppCompatActivity {
     private int refreshMs = 2000;
 
     private Button btnPtt;
+    private Button btnRefreshList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,6 +54,25 @@ public class MainActivity extends AppCompatActivity {
         recycler.setLayoutManager(new LinearLayoutManager(this));
         adapter = new ChanAdapter(this);
         recycler.setAdapter(adapter);
+
+        btnRefreshList = findViewById(R.id.btnRefreshList);
+        if (btnRefreshList != null) {
+            btnRefreshList.setOnClickListener(v -> {
+                if (PmrService.pmrSocket == null) {
+                    Toast.makeText(MainActivity.this,
+                            R.string.toast_ban_null, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!PmrService.pmrSocket.isRunning()) {
+                    Toast.makeText(MainActivity.this,
+                            R.string.toast_ban_not_running, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                PmrService.pmrSocket.sendL();
+                Toast.makeText(MainActivity.this,
+                        R.string.list_refreshing, Toast.LENGTH_SHORT).show();
+            });
+        }
 
         Button settingsBtn = findViewById(R.id.btnSettings);
         if (settingsBtn != null) {
