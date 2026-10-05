@@ -17,11 +17,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек V5.2.
+/* Экран настроек V5.5.
  *
- * Изменения V5.2:
- *   - добавлена кнопка «ПРОВЕРИТЬ ОБНОВЛЕНИЕ»;
- *   - обработчик запускает UpdateChecker.
+ * Изменения V5.5:
+ *   - возвращены поля PORT_prm, PORT_prd, Mic, Spk в «Регистрационные данные».
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -44,6 +43,10 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regIpServer2;
     private EditText regCallsign;
     private EditText regCity;
+    private EditText regPortPrm;
+    private EditText regPortPrd;
+    private EditText regMicGain;
+    private EditText regSpkGain;
 
     private ActivityResultLauncher<String[]> filePicker;
 
@@ -74,6 +77,10 @@ public class SettingsActivity extends AppCompatActivity {
         regIpServer2 = findViewById(R.id.regIpServer2);
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
+        regPortPrm   = findViewById(R.id.regPortPrm);
+        regPortPrd   = findViewById(R.id.regPortPrd);
+        regMicGain   = findViewById(R.id.regMicGain);
+        regSpkGain   = findViewById(R.id.regSpkGain);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
@@ -184,6 +191,22 @@ public class SettingsActivity extends AppCompatActivity {
             regCity.setText(sp.getString(
                     PasswordActivity.KEY_CITY,
                     PasswordActivity.DEFAULT_CITY));
+        if (regPortPrm != null)
+            regPortPrm.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_PORT_PRM,
+                    PasswordActivity.DEFAULT_PORT_PRM)));
+        if (regPortPrd != null)
+            regPortPrd.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_PORT_PRD,
+                    PasswordActivity.DEFAULT_PORT_PRD)));
+        if (regMicGain != null)
+            regMicGain.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_MIC_GAIN,
+                    PasswordActivity.DEFAULT_MIC_GAIN)));
+        if (regSpkGain != null)
+            regSpkGain.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_SPK_GAIN,
+                    PasswordActivity.DEFAULT_SPK_GAIN)));
     }
 
     private void toggle26() {
@@ -308,6 +331,14 @@ public class SettingsActivity extends AppCompatActivity {
                 ? regCallsign.getText().toString().trim() : "";
         String city = (regCity != null)
                 ? regCity.getText().toString().trim() : "";
+        String portPrmStr = (regPortPrm != null)
+                ? regPortPrm.getText().toString().trim() : "";
+        String portPrdStr = (regPortPrd != null)
+                ? regPortPrd.getText().toString().trim() : "";
+        String micGainStr = (regMicGain != null)
+                ? regMicGain.getText().toString().trim() : "";
+        String spkGainStr = (regSpkGain != null)
+                ? regSpkGain.getText().toString().trim() : "";
 
         if (!myMailIndex.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_MY_MAIL_INDEX, myMailIndex).apply();
@@ -323,6 +354,55 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.KEY_CALLSIGN, callsign).apply();
         if (!city.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CITY, city).apply();
+
+        if (!portPrmStr.isEmpty()) {
+            try {
+                int v = Integer.parseInt(portPrmStr);
+                if (v > 0 && v < 65536) {
+                    sp.edit().putInt(PasswordActivity.KEY_PORT_PRM, v).apply();
+                } else {
+                    Toast.makeText(this, "PORT_prm: 1..65535",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                Toast.makeText(this, "PORT_prm: число",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+        if (!portPrdStr.isEmpty()) {
+            try {
+                int v = Integer.parseInt(portPrdStr);
+                if (v > 0 && v < 65536) {
+                    sp.edit().putInt(PasswordActivity.KEY_PORT_PRD, v).apply();
+                } else {
+                    Toast.makeText(this, "PORT_prd: 1..65535",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                Toast.makeText(this, "PORT_prd: число",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+        if (!micGainStr.isEmpty()) {
+            try {
+                int v = Integer.parseInt(micGainStr);
+                if (v < 0) v = 0;
+                if (v > 100) v = 100;
+                sp.edit().putInt(PasswordActivity.KEY_MIC_GAIN, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+        if (!spkGainStr.isEmpty()) {
+            try {
+                int v = Integer.parseInt(spkGainStr);
+                if (v < 0) v = 0;
+                if (v > 200) v = 200;
+                sp.edit().putInt(PasswordActivity.KEY_SPK_GAIN, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
 
         if (PmrService.pmrSocket != null) {
             PmrService.pmrSocket.reloadFromPrefs(this);
