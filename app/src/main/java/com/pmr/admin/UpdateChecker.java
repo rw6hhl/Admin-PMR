@@ -2,14 +2,10 @@ package com.pmr.admin;
 
 import android.app.AlertDialog;
 import android.content.Context;
-import android.content.Intent;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Environment;
 import android.widget.Toast;
-
-import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -17,15 +13,16 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-/* Проверка и установка обновлений Admin PMR V1.0.
+/* Проверка и скачивание обновлений Admin PMR V2.0.
  *
- * Источник: https://github.com/rw6hhl/Admin-PMR/raw/main/apk/app-vX_Y.apk
- * Приложение проверяет наличие файла APK по URL, скачивает во внешнюю
- * папку приложения и открывает системный установщик через FileProvider.
+ * Изменения V2.0 (V5.3.1):
+ *   - APK сохраняется в публичную папку Download (Environment.DIRECTORY_DOWNLOADS);
+ *   - файл доступен через проводник телефона и не удаляется при удалении приложения;
+ *   - установщик НЕ запускается автоматически — вместо этого показывается
+ *     подсказка: «Удалите старую версию, откройте проводник, найдите APK и установите».
  */
 public class UpdateChecker {
 
-    /* Базовый URL папки с APK в репозитории. */
     private static final String BASE_URL =
             "https://github.com/rw6hhl/Admin-PMR/raw/main/apk/";
 
@@ -35,26 +32,20 @@ public class UpdateChecker {
         this.ctx = ctx;
     }
 
-    /* Запуск проверки версии vStr (например, "5.2").
-     * Ищет APK для следующей версии — пробует vStr+0.1, потом vStr+0.2 и т.д.
-     * При нахождении — предлагает скачать и установить. */
     public void checkAndUpdate(String currentVersion) {
         String[] candidates = buildCandidateNames(currentVersion);
         new CheckTask(candidates).execute();
     }
 
-    /* Формирует список имён APK-файлов, которые могут быть новее текущей версии.
-     * Например, для "5.1.1" пробуем "app-v5_2.apk", "app-v5_2_0.apk", "app-v5_2_1.apk" и т.д. */
     private String[] buildCandidateNames(String currentVersion) {
         try {
             String[] parts = currentVersion.split("\\.");
             int major = Integer.parseInt(parts[0]);
             int minor = (parts.length > 1) ? Integer.parseInt(parts[1]) : 0;
-            /* Пробуем следующую минорную версию. */
             String candidate = "app-v" + major + "_" + (minor + 1) + ".apk";
             return new String[]{candidate};
         } catch (Exception e) {
-            return new String[]{"app-v5_2.apk"};
+            return new String[]{"app-v5_3.apk"};
         }
     }
 
@@ -98,7 +89,8 @@ public class UpdateChecker {
     private void askDownload(final String fileName) {
         new AlertDialog.Builder(ctx)
                 .setTitle("Обновление")
-                .setMessage("Найдено обновление: " + fileName + ". Скачать и установить?")
+                .setMessage("Найдено обновление: " + fileName
+                        + "\n\nСкачать в папку Download?")
                 .setPositiveButton("Скачать", (d, w) -> download(fileName))
                 .setNegativeButton("Отмена", null)
                 .show();
@@ -118,9 +110,15 @@ public class UpdateChecker {
         @Override
         protected File doInBackground(Void... voids) {
             try {
-                File dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                /* Публичная папка Download — доступна через проводник. */
+                File dir = Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS);
+                if (dir == null) {
+                    dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                }
                 if (dir == null) dir = ctx.getFilesDir();
                 if (!dir.exists()) dir.mkdirs();
+
                 File out = new File(dir, fileName);
 
                 URL url = new URL(BASE_URL + fileName);
@@ -153,31 +151,28 @@ public class UpdateChecker {
                 Toast.makeText(ctx, "Ошибка скачивания", Toast.LENGTH_SHORT).show();
                 return;
             }
-            install(file);
+            showInstallHint(file);
         }
     }
 
-    private void install(File apk) {
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                    | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    /* Показывает подсказку — не запускает установщик. */
+    private void showInstallHint(File apk) {
+        String path = apk.getAbsolutePath();
+        String msg = "Файл сохранён:\n" + path + "\n\n"
+                + "Как установить:\n"
+                + "1. Удалите старую версию Admin PMR "
+                + "(Настройки → Приложения → Admin PMR → Удалить).\n"
+                + "2. Откройте проводник (Files, Мои файлы).\n"
+                + "3. Перейдите в папку Download.\n"
+                + "4. Найдите файл " + apk.getName() + ".\n"
+                + "5. Нажмите на него и установите.";
 
-            Uri uri;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                uri = FileProvider.getUriForFile(ctx,
-                        ctx.getPackageName() + ".fileprovider", apk);
-            } else {
-                uri = Uri.fromFile(apk);
-            }
-            intent.setDataAndType(uri,
-                    "application/vnd.android.package-archive");
-            ctx.startActivity(intent);
-            AppLog.add("UpdateChecker: открыт установщик");
-        } catch (Exception e) {
-            AppLog.add("UpdateChecker: ошибка запуска установщика — " + e);
-            Toast.makeText(ctx, "Ошибка установки: " + e.getMessage(),
-                    Toast.LENGTH_LONG).show();
-        }
+        new AlertDialog.Builder(ctx)
+                .setTitle("Готово к установке")
+                .setMessage(msg)
+                .setPositiveButton("Понятно", null)
+                .show();
+
+        AppLog.add("UpdateChecker: подсказка показана, APK=" + path);
     }
 }
