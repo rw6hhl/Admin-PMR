@@ -62,6 +62,40 @@
             android:textSize="16sp"
             android:checked="true" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/settings_refresh_title"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/refreshInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/settings_refresh_hint"
+            android:inputType="number"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/settings_port_title"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/portInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/settings_port_hint"
+            android:inputType="number"
+            android:textSize="18sp" />
+
         <CheckBox
             android:id="@+id/checkSystemBox"
             android:layout_width="match_parent"
@@ -71,58 +105,6 @@
             android:textSize="16sp"
             android:checked="true" />
 
-        <CheckBox
-            android:id="@+id/diagBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Расширенная диагностика (для отладки)"
-            android:textSize="16sp"
-            android:checked="true" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Источник списка абонентов"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <RadioGroup
-            android:id="@+id/listSourceGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginTop="8dp">
-
-            <RadioButton
-                android:id="@+id/radioListServer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Список от сервера (cmd=234)"
-                android:textSize="16sp"
-                android:checked="true" />
-
-            <RadioButton
-                android:id="@+id/radioListLocal"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Список из list.txt (без запроса серверу)"
-                android:textSize="16sp" />
-        </RadioGroup>
-
-        <Button
-            android:id="@+id/btnLoadList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/btn_load_list"
-            android:backgroundTint="@color/c_blue"
-            android:textColor="@color/c_white"
-            android:textSize="16sp"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp" />
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -131,17 +113,20 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <LinearLayout android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="8dp">
-            <TextView android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="140dp"
                 android:text="Priznak_pmr  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regPriznak"
+            <EditText
+                android:id="@+id/regPriznak"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -149,17 +134,20 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="140dp"
                 android:text="MyMailIndex  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regMailIndex"
+            <EditText
+                android:id="@+id/regMailIndex"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -167,17 +155,20 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="140dp"
                 android:text="MyPChannel   ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regPChannel"
+            <EditText
+                android:id="@+id/regPChannel"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -185,17 +176,20 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="140dp"
                 android:text="ip_server  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regIpServer"
+            <EditText
+                android:id="@+id/regIpServer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -203,89 +197,41 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="140dp"
-                android:text="PORT_prm  ="
+                android:text="ip_server2 ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regPortPrm"
+            <EditText
+                android:id="@+id/regIpServer2"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:inputType="number"
+                android:inputType="text"
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="140dp"
-                android:text="PORT_prd  ="
-                android:textSize="16sp"
-                android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regPortPrd"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:inputType="number"
-                android:textSize="16sp" />
-        </LinearLayout>
-
-        <LinearLayout android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="140dp"
-                android:text="Mic  ="
-                android:textSize="16sp"
-                android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regMicGain"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:inputType="number"
-                android:textSize="16sp" />
-        </LinearLayout>
-
-        <LinearLayout android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="140dp"
-                android:text="Spk  ="
-                android:textSize="16sp"
-                android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regSpkGain"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:inputType="number"
-                android:textSize="16sp" />
-        </LinearLayout>
-
-        <LinearLayout android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="140dp"
                 android:text="Call  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regCallsign"
+            <EditText
+                android:id="@+id/regCallsign"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -293,17 +239,20 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
-            <TextView android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="140dp"
                 android:text="QTH  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regCity"
+            <EditText
+                android:id="@+id/regCity"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -315,9 +264,9 @@
             android:id="@+id/btnSaveSettings"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="16dp"
             android:text="@string/settings_save"
-            android:backgroundTint="@color/c_green"
+            android:backgroundTint="@color/c_blue"
             android:textColor="@color/c_white"
             android:textSize="18sp"
             android:paddingTop="14dp"
@@ -354,13 +303,37 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:layout_marginBottom="16dp"
             android:text="@string/settings_log_open"
             android:backgroundTint="@color/c_blue"
             android:textColor="@color/c_white"
             android:textSize="16sp"
             android:paddingTop="14dp"
             android:paddingBottom="14dp" />
+
+        <Button
+            android:id="@+id/btnLoadList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/btn_load_list"
+            android:textSize="16sp"
+            android:textColor="@color/c_white"
+            android:backgroundTint="@color/c_green"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp" />
+
+        <Button
+            android:id="@+id/btnUpdateCheck"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="16dp"
+            android:text="@string/btn_update_check"
+            android:textSize="16sp"
+            android:textColor="@color/c_white"
+            android:backgroundTint="@color/c_blue"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp" />
 
     </LinearLayout>
 </ScrollView>

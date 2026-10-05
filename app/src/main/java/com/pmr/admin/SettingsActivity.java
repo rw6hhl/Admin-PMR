@@ -8,8 +8,6 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -19,30 +17,31 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек Admin PMR V4.7. */
+/* Экран настроек V5.2.
+ *
+ * Изменения V5.2:
+ *   - добавлена кнопка «ПРОВЕРИТЬ ОБНОВЛЕНИЕ»;
+ *   - обработчик запускает UpdateChecker.
+ */
 public class SettingsActivity extends AppCompatActivity {
 
     private EditText passCurrent;
     private EditText passNew;
     private EditText passConfirm;
+    private EditText refreshInput;
+    private EditText portInput;
     private CheckBox requirePassBox;
     private CheckBox checkSystemBox;
-    private CheckBox diagBox;
-    private RadioGroup listSourceGroup;
-    private RadioButton radioServer;
-    private RadioButton radioLocal;
     private Button btn26;
     private Button btnOpenLog;
     private Button btnLoadList;
+    private Button btnUpdateCheck;
 
     private EditText regMailIndex;
     private EditText regPChannel;
     private EditText regPriznak;
     private EditText regIpServer;
-    private EditText regPortPrm;
-    private EditText regPortPrd;
-    private EditText regMicGain;
-    private EditText regSpkGain;
+    private EditText regIpServer2;
     private EditText regCallsign;
     private EditText regCity;
 
@@ -53,29 +52,26 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         setContentView(R.layout.activity_settings);
 
-        passCurrent  = findViewById(R.id.passCurrent);
-        passNew      = findViewById(R.id.passNew);
-        passConfirm  = findViewById(R.id.passConfirm);
+        passCurrent = findViewById(R.id.passCurrent);
+        passNew     = findViewById(R.id.passNew);
+        passConfirm = findViewById(R.id.passConfirm);
+        refreshInput = findViewById(R.id.refreshInput);
+        portInput = findViewById(R.id.portInput);
         requirePassBox = findViewById(R.id.requirePassBox);
         checkSystemBox = findViewById(R.id.checkSystemBox);
-        diagBox      = findViewById(R.id.diagBox);
-        listSourceGroup = findViewById(R.id.listSourceGroup);
-        radioServer  = findViewById(R.id.radioListServer);
-        radioLocal   = findViewById(R.id.radioListLocal);
         btn26 = findViewById(R.id.btn26);
         btnOpenLog = findViewById(R.id.btnOpenLog);
         btnLoadList = findViewById(R.id.btnLoadList);
+        btnUpdateCheck = findViewById(R.id.btnUpdateCheck);
 
         regMailIndex = findViewById(R.id.regMailIndex);
         regPChannel  = findViewById(R.id.regPChannel);
         regPriznak   = findViewById(R.id.regPriznak);
         regIpServer  = findViewById(R.id.regIpServer);
-        regPortPrm   = findViewById(R.id.regPortPrm);
-        regPortPrd   = findViewById(R.id.regPortPrd);
-        regMicGain   = findViewById(R.id.regMicGain);
-        regSpkGain   = findViewById(R.id.regSpkGain);
+        regIpServer2 = findViewById(R.id.regIpServer2);
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
 
@@ -100,6 +96,13 @@ public class SettingsActivity extends AppCompatActivity {
                     filePicker.launch(new String[]{"text/plain", "*/*"}));
         }
 
+        if (btnUpdateCheck != null) {
+            btnUpdateCheck.setOnClickListener(v -> {
+                String version = getString(R.string.app_version).replace("V", "");
+                new UpdateChecker(SettingsActivity.this).checkAndUpdate(version);
+            });
+        }
+
         loadSettings();
     }
 
@@ -118,6 +121,7 @@ public class SettingsActivity extends AppCompatActivity {
             PmrService.listFile.save(dest);
 
             if (PmrService.chanList != null) PmrService.chanList.clear();
+            if (PmrService.pmrSocket != null) PmrService.pmrSocket.sendList();
 
             Toast.makeText(this,
                     getString(R.string.toast_list_loaded, n),
@@ -133,6 +137,14 @@ public class SettingsActivity extends AppCompatActivity {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
+        int r = sp.getInt(PasswordActivity.KEY_REFRESH,
+                PasswordActivity.DEFAULT_REFRESH);
+        if (refreshInput != null) refreshInput.setText(String.valueOf(r));
+
+        int p = sp.getInt(PasswordActivity.KEY_PORT_PRM,
+                PasswordActivity.DEFAULT_PORT_PRM);
+        if (portInput != null) portInput.setText(String.valueOf(p));
+
         boolean requirePass = sp.getBoolean(
                 PasswordActivity.KEY_REQUIRE_PASSWORD, true);
         if (requirePassBox != null) requirePassBox.setChecked(requirePass);
@@ -140,18 +152,6 @@ public class SettingsActivity extends AppCompatActivity {
         boolean checkSystem = sp.getBoolean(
                 PasswordActivity.KEY_CHECK_SYSTEM, true);
         if (checkSystemBox != null) checkSystemBox.setChecked(checkSystem);
-
-        boolean diag = sp.getBoolean(PasswordActivity.KEY_DIAG_ENABLED,
-                PasswordActivity.DEFAULT_DIAG_ENABLED);
-        if (diagBox != null) diagBox.setChecked(diag);
-
-        String src = sp.getString(PasswordActivity.KEY_LIST_SOURCE,
-                PasswordActivity.DEFAULT_LIST_SOURCE);
-        if ("local".equals(src)) {
-            if (radioLocal != null) radioLocal.setChecked(true);
-        } else {
-            if (radioServer != null) radioServer.setChecked(true);
-        }
 
         boolean on26 = sp.getBoolean(PasswordActivity.KEY_26_STATE, false);
         updateBtn26(on26);
@@ -172,22 +172,10 @@ public class SettingsActivity extends AppCompatActivity {
             regIpServer.setText(sp.getString(
                     PasswordActivity.KEY_IP_SERVER,
                     PasswordActivity.DEFAULT_IP_SERVER));
-        if (regPortPrm != null)
-            regPortPrm.setText(String.valueOf(sp.getInt(
-                    PasswordActivity.KEY_PORT_PRM,
-                    PasswordActivity.DEFAULT_PORT_PRM)));
-        if (regPortPrd != null)
-            regPortPrd.setText(String.valueOf(sp.getInt(
-                    PasswordActivity.KEY_PORT_PRD,
-                    PasswordActivity.DEFAULT_PORT_PRD)));
-        if (regMicGain != null)
-            regMicGain.setText(String.valueOf(sp.getInt(
-                    PasswordActivity.KEY_MIC_GAIN,
-                    PasswordActivity.DEFAULT_MIC_GAIN)));
-        if (regSpkGain != null)
-            regSpkGain.setText(String.valueOf(sp.getInt(
-                    PasswordActivity.KEY_SPK_GAIN,
-                    PasswordActivity.DEFAULT_SPK_GAIN)));
+        if (regIpServer2 != null)
+            regIpServer2.setText(sp.getString(
+                    PasswordActivity.KEY_IP_SERVER2,
+                    PasswordActivity.DEFAULT_IP_SERVER2));
         if (regCallsign != null)
             regCallsign.setText(sp.getString(
                     PasswordActivity.KEY_CALLSIGN,
@@ -234,23 +222,9 @@ public class SettingsActivity extends AppCompatActivity {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
-        boolean requirePass = requirePassBox != null && requirePassBox.isChecked();
-        sp.edit().putBoolean(PasswordActivity.KEY_REQUIRE_PASSWORD,
-                requirePass).apply();
-
-        boolean checkSystem = checkSystemBox != null && checkSystemBox.isChecked();
-        sp.edit().putBoolean(PasswordActivity.KEY_CHECK_SYSTEM,
-                checkSystem).apply();
-
-        boolean diag = diagBox != null && diagBox.isChecked();
-        sp.edit().putBoolean(PasswordActivity.KEY_DIAG_ENABLED, diag).apply();
-
-        String src = "server";
-        if (radioLocal != null && radioLocal.isChecked()) src = "local";
-        sp.edit().putString(PasswordActivity.KEY_LIST_SOURCE, src).apply();
-
         String cur = sp.getString(PasswordActivity.KEY_PASSWORD,
                 PasswordActivity.DEFAULT_PASSWORD);
+
         String enteredCur = passCurrent.getText().toString();
         String newPass = passNew.getText().toString();
         String confirmPass = passConfirm.getText().toString();
@@ -274,6 +248,52 @@ public class SettingsActivity extends AppCompatActivity {
             sp.edit().putString(PasswordActivity.KEY_PASSWORD, newPass).apply();
         }
 
+        int refresh = PasswordActivity.DEFAULT_REFRESH;
+        try {
+            String rs = refreshInput.getText().toString().trim();
+            if (!rs.isEmpty()) {
+                int v = Integer.parseInt(rs);
+                if (v >= 1 && v <= 60) refresh = v;
+                else {
+                    Toast.makeText(this, "Частота: 1..60",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "Частота: число",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        sp.edit().putInt(PasswordActivity.KEY_REFRESH, refresh).apply();
+
+        int port = PasswordActivity.DEFAULT_PORT_PRM;
+        try {
+            String ps = portInput.getText().toString().trim();
+            if (!ps.isEmpty()) {
+                int v = Integer.parseInt(ps);
+                if (v >= 1024 && v <= 65535) port = v;
+                else {
+                    Toast.makeText(this, "Порт: 1024..65535",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "Порт: число",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        sp.edit().putInt(PasswordActivity.KEY_PORT_PRM, port).apply();
+
+        boolean requirePass = requirePassBox != null && requirePassBox.isChecked();
+        sp.edit().putBoolean(PasswordActivity.KEY_REQUIRE_PASSWORD,
+                requirePass).apply();
+
+        boolean checkSystem = checkSystemBox != null && checkSystemBox.isChecked();
+        sp.edit().putBoolean(PasswordActivity.KEY_CHECK_SYSTEM,
+                checkSystem).apply();
+
         String myMailIndex = (regMailIndex != null)
                 ? regMailIndex.getText().toString().trim() : "";
         String myPChannel = (regPChannel != null)
@@ -282,14 +302,8 @@ public class SettingsActivity extends AppCompatActivity {
                 ? regPriznak.getText().toString().trim() : "";
         String ipServer = (regIpServer != null)
                 ? regIpServer.getText().toString().trim() : "";
-        String portPrmStr = (regPortPrm != null)
-                ? regPortPrm.getText().toString().trim() : "";
-        String portPrdStr = (regPortPrd != null)
-                ? regPortPrd.getText().toString().trim() : "";
-        String micGainStr = (regMicGain != null)
-                ? regMicGain.getText().toString().trim() : "";
-        String spkGainStr = (regSpkGain != null)
-                ? regSpkGain.getText().toString().trim() : "";
+        String ipServer2 = (regIpServer2 != null)
+                ? regIpServer2.getText().toString().trim() : "";
         String callsign = (regCallsign != null)
                 ? regCallsign.getText().toString().trim() : "";
         String city = (regCity != null)
@@ -303,54 +317,8 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.KEY_PRIZNAK_PMR, priznak).apply();
         if (!ipServer.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_IP_SERVER, ipServer).apply();
-        if (!portPrmStr.isEmpty()) {
-            try {
-                int v = Integer.parseInt(portPrmStr);
-                if (v > 0 && v < 65536) {
-                    sp.edit().putInt(PasswordActivity.KEY_PORT_PRM, v).apply();
-                } else {
-                    Toast.makeText(this, "PORT_prm: 1..65535",
-                            Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            } catch (NumberFormatException e) {
-                Toast.makeText(this, "PORT_prm: число",
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-        }
-        if (!portPrdStr.isEmpty()) {
-            try {
-                int v = Integer.parseInt(portPrdStr);
-                if (v > 0 && v < 65536) {
-                    sp.edit().putInt(PasswordActivity.KEY_PORT_PRD, v).apply();
-                } else {
-                    Toast.makeText(this, "PORT_prd: 1..65535",
-                            Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            } catch (NumberFormatException e) {
-                Toast.makeText(this, "PORT_prd: число",
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-        }
-        if (!micGainStr.isEmpty()) {
-            try {
-                int v = Integer.parseInt(micGainStr);
-                if (v < 0) v = 0;
-                if (v > 100) v = 100;
-                sp.edit().putInt(PasswordActivity.KEY_MIC_GAIN, v).apply();
-            } catch (NumberFormatException ignored) {}
-        }
-        if (!spkGainStr.isEmpty()) {
-            try {
-                int v = Integer.parseInt(spkGainStr);
-                if (v < 0) v = 0;
-                if (v > 200) v = 200;
-                sp.edit().putInt(PasswordActivity.KEY_SPK_GAIN, v).apply();
-            } catch (NumberFormatException ignored) {}
-        }
+        if (!ipServer2.isEmpty()) sp.edit().putString(
+                PasswordActivity.KEY_IP_SERVER2, ipServer2).apply();
         if (!callsign.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CALLSIGN, callsign).apply();
         if (!city.isEmpty()) sp.edit().putString(

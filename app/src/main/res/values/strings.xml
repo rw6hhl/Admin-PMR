@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Admin PMR</string>
-    <string name="app_version">V5.1.1</string>
+    <string name="app_version">V5.2</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -80,4 +80,5 @@
     <string name="btn_load_list">ЗАГРУЗИТЬ list.txt</string>
     <string name="toast_list_loaded">Список загружен: %1$d записей</string>
     <string name="toast_list_error">Ошибка загрузки list.txt</string>
+    <string name="btn_update_check">ПРОВЕРИТЬ ОБНОВЛЕНИЕ</string>
 </resources>
