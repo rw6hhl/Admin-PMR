@@ -10,9 +10,9 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Admin PMR V6.3.
+/* Экран ввода пароля Admin PMR V5.11.
  *
- * Изменения V6.3:
+ * Изменения V5.11:
  *   - DEFAULT_IP_SERVER = "109.172.7.155";
  *   - DEFAULT_PORT_PRD = 16300.
  */

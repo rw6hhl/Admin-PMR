@@ -11,14 +11,13 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V6.3.
+/* UDP-логика PMR V5.11.
  *
- * Изменения V6.3:
- *   - оставлен ОДИН сервер: 109.172.7.155, порт 16300;
- *   - второй сервер (IP_SERVER2) и PORT_RESERVE убраны из отправки;
- *   - cmd=7 исключён полностью (ни в timerLoop, ни в ответе на cmd=0);
- *   - отправляется только нулевой пакет (0/0/priznak/secret);
- *   - sendRaw → только на IP_SERVER : port_prd + kanal_PRD.
+ * Изменения V5.11:
+ *   - один сервер: 109.172.7.155, порт 16300;
+ *   - второй сервер убран из отправки;
+ *   - cmd=7 исключён полностью;
+ *   - отправляется только нулевой пакет (0/0/priznak/secret).
  */
 public class PmrSocket {
 
@@ -91,7 +90,6 @@ public class PmrSocket {
         AppLog.add("PmrSocket: listSource=" + src);
     }
 
-    /* Голос — только mainPacket на единственный сервер. */
     public void sendVoice(byte[] mainPacket, byte[] reservePacket) {
         if (mainPacket == null) return;
         DatagramSocket s = sock;
@@ -160,7 +158,7 @@ public class PmrSocket {
             sock.setSoTimeout(100);
             IP_SERVER = sp.getString(PasswordActivity.KEY_IP_SERVER,
                     PasswordActivity.DEFAULT_IP_SERVER);
-            serverAddr  = InetAddress.getByName(IP_SERVER);
+            serverAddr = InetAddress.getByName(IP_SERVER);
         } catch (Exception e) {
             AppLog.add("PmrSocket: ошибка сокета — " + e);
             return;
@@ -204,7 +202,6 @@ public class PmrSocket {
         try { if (sock != null) sock.close(); } catch (Exception ignored) {}
     }
 
-    /* V6.3: cmd=7 исключён. Отправляется только нулевой пакет. */
     private void timerLoop() {
         int cikl_PRD = 0;
         int cikl = 0;
@@ -273,7 +270,6 @@ public class PmrSocket {
                     switch (command) {
                         case 0:
                             AppLog.addCmd("←", "cmd=0 kanal=" + kanal);
-                            /* V6.3: ответ — нулевой пакет (0/0/priznak/secret). */
                             if (kanal_Secret != 0) {
                                 byte[] ping = new byte[6];
                                 ping[0] = 0;
@@ -287,7 +283,6 @@ public class PmrSocket {
                             break;
                         case 7:
                             AppLog.addCmd("←", "cmd=7 kanal=" + kanal);
-                            /* V6.3: cmd=7 не отвечаем. */
                             break;
                         case 'n':
                             AppLog.addCmd("←", "cmd=n client=" + client);
@@ -407,7 +402,6 @@ public class PmrSocket {
         }
     }
 
-    /* V6.3: только один сервер. */
     private void sendRaw(byte[] buf) {
         DatagramSocket s = sock;
         InetAddress a1 = serverAddr;

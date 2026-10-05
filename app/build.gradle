@@ -10,8 +10,8 @@ android {
         applicationId "com.pmr.admin"
         minSdk 24
         targetSdk 34
-        versionCode 63
-        versionName "6.3"
+        versionCode 511
+        versionName "5.11"
     }
 
     buildTypes {
