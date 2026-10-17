@@ -20,15 +20,20 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/* Главный экран V6.7.
+/* Главный экран V6.8.
  *
- * Изменения V6.7:
- *   - 3 клика по заголовку «НАСТРОЙКИ» открывают LogActivity (скрытый доступ).
+ * Изменения V6.8:
+ *   - счётчик кликов по «НАСТРОЙКИ» статический — 3 клика открывают LogActivity;
+ *   - одиночный клик открывает SettingsActivity.
  */
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_NOTIF = 100;
     private static final int REQ_MIC = 101;
+
+    /* Статический счётчик — сохраняется между переходами. */
+    private static int settingsClickCount = 0;
+    private static long lastSettingsClickMs = 0;
 
     private RecyclerView recycler;
     private ChanAdapter adapter;
@@ -38,9 +43,6 @@ public class MainActivity extends AppCompatActivity {
     private Button btnPtt;
     private Button btnRefreshList;
     private Button btnSettings;
-
-    private int settingsClickCount = 0;
-    private long lastSettingsClickMs = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,7 +88,7 @@ public class MainActivity extends AppCompatActivity {
         if (btnSettings != null) {
             btnSettings.setOnClickListener(v -> {
                 long now = System.currentTimeMillis();
-                if (now - lastSettingsClickMs > 1500) {
+                if (now - lastSettingsClickMs > 2000) {
                     settingsClickCount = 0;
                 }
                 lastSettingsClickMs = now;

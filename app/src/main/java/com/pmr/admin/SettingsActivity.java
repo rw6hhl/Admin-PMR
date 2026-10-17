@@ -5,7 +5,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -18,12 +17,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек V6.5.
+/* Экран настроек V6.8.
  *
- * Изменения V6.5:
- *   - убран блок «26 Регион»;
- *   - убран блок «Открыть логи»;
- *   - убран блок «Проверка системы».
+ * Изменения V6.8:
+ *   - убран requirePassBox.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -31,7 +28,6 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText passNew;
     private EditText passConfirm;
     private EditText refreshInput;
-    private CheckBox requirePassBox;
     private Button btnLoadList;
     private Button btnUpdateCheck;
 
@@ -65,7 +61,6 @@ public class SettingsActivity extends AppCompatActivity {
         passNew     = findViewById(R.id.passNew);
         passConfirm = findViewById(R.id.passConfirm);
         refreshInput = findViewById(R.id.refreshInput);
-        requirePassBox = findViewById(R.id.requirePassBox);
         btnLoadList = findViewById(R.id.btnLoadList);
         btnUpdateCheck = findViewById(R.id.btnUpdateCheck);
 
@@ -151,10 +146,6 @@ public class SettingsActivity extends AppCompatActivity {
         int r = sp.getInt(PasswordActivity.KEY_REFRESH,
                 PasswordActivity.DEFAULT_REFRESH);
         if (refreshInput != null) refreshInput.setText(String.valueOf(r));
-
-        boolean requirePass = sp.getBoolean(
-                PasswordActivity.KEY_REQUIRE_PASSWORD, true);
-        if (requirePassBox != null) requirePassBox.setChecked(requirePass);
 
         if (regMailIndex != null)
             regMailIndex.setText(sp.getString(
@@ -254,10 +245,6 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
         sp.edit().putInt(PasswordActivity.KEY_REFRESH, refresh).apply();
-
-        boolean requirePass = requirePassBox != null && requirePassBox.isChecked();
-        sp.edit().putBoolean(PasswordActivity.KEY_REQUIRE_PASSWORD,
-                requirePass).apply();
 
         String myMailIndex = (regMailIndex != null)
                 ? regMailIndex.getText().toString().trim() : "";

@@ -84,15 +84,6 @@
             android:inputType="textPassword"
             android:textSize="18sp" />
 
-        <CheckBox
-            android:id="@+id/requirePassBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/settings_password_title"
-            android:textSize="16sp"
-            android:checked="true" />
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
