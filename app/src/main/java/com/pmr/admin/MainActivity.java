@@ -20,10 +20,10 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/* Главный экран V5.9.
+/* Главный экран V6.7.
  *
- * Изменения V5.9:
- *   - кнопка «ОБНОВИТЬ СПИСОК» учитывает источник списка (server / local).
+ * Изменения V6.7:
+ *   - 3 клика по заголовку «НАСТРОЙКИ» открывают LogActivity (скрытый доступ).
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -37,6 +37,10 @@ public class MainActivity extends AppCompatActivity {
 
     private Button btnPtt;
     private Button btnRefreshList;
+    private Button btnSettings;
+
+    private int settingsClickCount = 0;
+    private long lastSettingsClickMs = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,11 +82,23 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        Button settingsBtn = findViewById(R.id.btnSettings);
-        if (settingsBtn != null) {
-            settingsBtn.setOnClickListener(v -> {
-                Intent i = new Intent(MainActivity.this, SettingsActivity.class);
-                startActivity(i);
+        btnSettings = findViewById(R.id.btnSettings);
+        if (btnSettings != null) {
+            btnSettings.setOnClickListener(v -> {
+                long now = System.currentTimeMillis();
+                if (now - lastSettingsClickMs > 1500) {
+                    settingsClickCount = 0;
+                }
+                lastSettingsClickMs = now;
+                settingsClickCount++;
+                if (settingsClickCount >= 3) {
+                    settingsClickCount = 0;
+                    Intent i = new Intent(MainActivity.this, LogActivity.class);
+                    startActivity(i);
+                } else {
+                    Intent i = new Intent(MainActivity.this, SettingsActivity.class);
+                    startActivity(i);
+                }
             });
         }
 
