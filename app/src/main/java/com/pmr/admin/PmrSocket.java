@@ -11,24 +11,30 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V5.11.
+/* UDP-логика PMR V6.4.
  *
- * Изменения V5.11:
- *   - один сервер: 109.172.7.155, порт 16300;
- *   - второй сервер убран из отправки;
- *   - cmd=7 исключён полностью;
- *   - отправляется только нулевой пакет (0/0/priznak/secret).
+ * Изменения V6.4:
+ *   - IP_SERVER = "185.221.154.39";
+ *   - port_prd = 15000;
+ *   - Priznak_pmr = 00000, MyMailIndex = 11111, MyPChannel = 4;
+ *   - добавлены secret_ext и my_name;
+ *   - в timerLoop добавлена отправка TEST_NAME (88) раз в 10 секунд;
+ *   - остальная логика как в V6.3.
  */
 public class PmrSocket {
 
-    public static String IP_SERVER = "109.172.7.155";
+    public static String IP_SERVER = "185.221.154.39";
 
     public static final int PORT_CMD   = 15999;
     public static final int PORT_CHECK = 16013;
 
-    public static int MyMailIndex = 51953;
+    public static int MyMailIndex = 11111;
     public static int MyPChannel  = 4;
     public static int Priznak_pmr = 00000;
+
+    /* Расширенный секрет и имя рации — из C-версии. */
+    public static int secret_ext = 21051967;
+    public static String my_name = "Admin rabota";
 
     private final ListFile listFile;
     private final ChanList chanList;
@@ -41,7 +47,7 @@ public class PmrSocket {
     private volatile DatagramSocket sock;
     private volatile InetAddress serverAddr;
     private int port_prm = 5323;
-    private int port_prd = 16300;
+    private int port_prd = 15000;
     private int kanal_PRD = 0;
     private int kanal_Secret = 0;
 
@@ -202,6 +208,8 @@ public class PmrSocket {
         try { if (sock != null) sock.close(); } catch (Exception ignored) {}
     }
 
+    /* V6.4: раз в 4 тика — нулевой пакет (признак+секрет).
+     * Раз в 10 тиков — TEST_NAME (88) с именем. */
     private void timerLoop() {
         int cikl_PRD = 0;
         int cikl = 0;
@@ -226,6 +234,8 @@ public class PmrSocket {
             if (cikl_PRD > 9) {
                 cikl_PRD = 0;
                 cikl++;
+
+                /* Раз в 4 тика: нулевой пакет с признаком и секретом. */
                 if (cikl > 3) {
                     byte[] buf = new byte[6];
                     buf[0] = 0;
@@ -236,6 +246,21 @@ public class PmrSocket {
                     buf[5] = (byte)((kanal_Secret >> 8) & 0xFF);
                     sendRaw(buf);
                     cikl = 0;
+                }
+
+                /* V6.4: TEST_NAME (88) раз в 10 тиков — раз в 10 секунд. */
+                if (cikl == 0) {
+                    byte[] namePkt = new byte[4 + 2 + my_name.getBytes().length + 1];
+                    namePkt[0] = (byte) 88;
+                    namePkt[1] = 0;
+                    namePkt[2] = (byte)(Priznak_pmr & 0xFF);
+                    namePkt[3] = (byte)((Priznak_pmr >> 8) & 0xFF);
+                    namePkt[4] = (byte)(Priznak_pmr & 0xFF);
+                    namePkt[5] = (byte)((Priznak_pmr >> 8) & 0xFF);
+                    byte[] nameBytes = my_name.getBytes();
+                    System.arraycopy(nameBytes, 0, namePkt, 6, nameBytes.length);
+                    namePkt[6 + nameBytes.length] = 0;
+                    sendRaw(namePkt);
                 }
             }
             diag++;

@@ -10,11 +10,15 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Admin PMR V5.11.
+/* Экран ввода пароля Admin PMR V6.4.
  *
- * Изменения V5.11:
- *   - DEFAULT_IP_SERVER = "109.172.7.155";
- *   - DEFAULT_PORT_PRD = 16300.
+ * Изменения V6.4:
+ *   - пароль по умолчанию: "12345";
+ *   - DEFAULT_IP_SERVER = "185.221.154.39";
+ *   - DEFAULT_PORT_PRD = 15000;
+ *   - DEFAULT_PRIZNAK_PMR = "00000";
+ *   - DEFAULT_MY_MAIL_INDEX = "11111";
+ *   - DEFAULT_MY_PCHANNEL = "4".
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -41,15 +45,15 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_MIC_GAIN      = "mic_gain";
     public static final String KEY_SPK_GAIN      = "spk_gain";
 
-    public static final String DEFAULT_PASSWORD = "Rostov2026";
+    public static final String DEFAULT_PASSWORD = "12345";
     public static final int    DEFAULT_REFRESH = 2;
     public static final int    DEFAULT_PORT_PRM = 5323;
-    public static final int    DEFAULT_PORT_PRD = 16300;
+    public static final int    DEFAULT_PORT_PRD = 15000;
 
-    public static final String DEFAULT_MY_MAIL_INDEX = "51953";
+    public static final String DEFAULT_MY_MAIL_INDEX = "11111";
     public static final String DEFAULT_MY_PCHANNEL   = "4";
     public static final String DEFAULT_PRIZNAK_PMR   = "00000";
-    public static final String DEFAULT_IP_SERVER     = "109.172.7.155";
+    public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
     public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
