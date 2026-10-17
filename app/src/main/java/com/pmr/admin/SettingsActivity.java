@@ -1,5 +1,6 @@
 package com.pmr.admin;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
@@ -17,19 +18,19 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек V6.8.
+/* Экран настроек V6.9.
  *
- * Изменения V6.8:
- *   - убран requirePassBox.
+ * Изменения V6.9:
+ *   - убран блок «Смена пароля»;
+ *   - убран requirePassBox;
+ *   - возвращена кнопка «ОТКРЫТЬ ЛОГИ».
  */
 public class SettingsActivity extends AppCompatActivity {
 
-    private EditText passCurrent;
-    private EditText passNew;
-    private EditText passConfirm;
     private EditText refreshInput;
     private Button btnLoadList;
     private Button btnUpdateCheck;
+    private Button btnOpenLog;
 
     private RadioGroup listSourceGroup;
     private RadioButton radioServer;
@@ -57,12 +58,10 @@ public class SettingsActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_settings);
 
-        passCurrent = findViewById(R.id.passCurrent);
-        passNew     = findViewById(R.id.passNew);
-        passConfirm = findViewById(R.id.passConfirm);
         refreshInput = findViewById(R.id.refreshInput);
         btnLoadList = findViewById(R.id.btnLoadList);
         btnUpdateCheck = findViewById(R.id.btnUpdateCheck);
+        btnOpenLog = findViewById(R.id.btnOpenLog);
 
         listSourceGroup = findViewById(R.id.listSourceGroup);
         radioServer = findViewById(R.id.radioListServer);
@@ -82,6 +81,11 @@ public class SettingsActivity extends AppCompatActivity {
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
+
+        if (btnOpenLog != null) btnOpenLog.setOnClickListener(v -> {
+            Intent i = new Intent(SettingsActivity.this, LogActivity.class);
+            startActivity(i);
+        });
 
         filePicker = registerForActivityResult(
                 new ActivityResultContracts.OpenDocument(),
@@ -196,32 +200,6 @@ public class SettingsActivity extends AppCompatActivity {
     private void saveSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
-
-        String cur = sp.getString(PasswordActivity.KEY_PASSWORD,
-                PasswordActivity.DEFAULT_PASSWORD);
-
-        String enteredCur = passCurrent.getText().toString();
-        String newPass = passNew.getText().toString();
-        String confirmPass = passConfirm.getText().toString();
-
-        if (!enteredCur.isEmpty() || !newPass.isEmpty() || !confirmPass.isEmpty()) {
-            if (!cur.equals(enteredCur)) {
-                Toast.makeText(this, R.string.settings_error_current,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (newPass.isEmpty()) {
-                Toast.makeText(this, R.string.settings_error_empty,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (!newPass.equals(confirmPass)) {
-                Toast.makeText(this, R.string.settings_error_mismatch,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            sp.edit().putString(PasswordActivity.KEY_PASSWORD, newPass).apply();
-        }
 
         String src = "server";
         if (radioLocal != null && radioLocal.isChecked()) src = "local";
@@ -347,9 +325,5 @@ public class SettingsActivity extends AppCompatActivity {
 
         Toast.makeText(this, R.string.settings_saved,
                 Toast.LENGTH_SHORT).show();
-
-        passCurrent.setText("");
-        passNew.setText("");
-        passConfirm.setText("");
     }
 }

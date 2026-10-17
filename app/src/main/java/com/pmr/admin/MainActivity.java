@@ -20,20 +20,11 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-/* Главный экран V6.8.
- *
- * Изменения V6.8:
- *   - счётчик кликов по «НАСТРОЙКИ» статический — 3 клика открывают LogActivity;
- *   - одиночный клик открывает SettingsActivity.
- */
+/* Главный экран V6.9 — как в V6.4. */
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_NOTIF = 100;
     private static final int REQ_MIC = 101;
-
-    /* Статический счётчик — сохраняется между переходами. */
-    private static int settingsClickCount = 0;
-    private static long lastSettingsClickMs = 0;
 
     private RecyclerView recycler;
     private ChanAdapter adapter;
@@ -42,7 +33,6 @@ public class MainActivity extends AppCompatActivity {
 
     private Button btnPtt;
     private Button btnRefreshList;
-    private Button btnSettings;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,23 +74,11 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        btnSettings = findViewById(R.id.btnSettings);
-        if (btnSettings != null) {
-            btnSettings.setOnClickListener(v -> {
-                long now = System.currentTimeMillis();
-                if (now - lastSettingsClickMs > 2000) {
-                    settingsClickCount = 0;
-                }
-                lastSettingsClickMs = now;
-                settingsClickCount++;
-                if (settingsClickCount >= 3) {
-                    settingsClickCount = 0;
-                    Intent i = new Intent(MainActivity.this, LogActivity.class);
-                    startActivity(i);
-                } else {
-                    Intent i = new Intent(MainActivity.this, SettingsActivity.class);
-                    startActivity(i);
-                }
+        Button settingsBtn = findViewById(R.id.btnSettings);
+        if (settingsBtn != null) {
+            settingsBtn.setOnClickListener(v -> {
+                Intent i = new Intent(MainActivity.this, SettingsActivity.class);
+                startActivity(i);
             });
         }
 

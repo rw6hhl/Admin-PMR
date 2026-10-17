@@ -52,41 +52,6 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="Смена пароля"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/passCurrent"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="@string/settings_current_pass"
-            android:inputType="textPassword"
-            android:textSize="18sp" />
-
-        <EditText
-            android:id="@+id/passNew"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="@string/settings_new_pass"
-            android:inputType="textPassword"
-            android:textSize="18sp" />
-
-        <EditText
-            android:id="@+id/passConfirm"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="@string/settings_confirm_pass"
-            android:inputType="textPassword"
-            android:textSize="18sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="Регистрационные данные"
             android:textSize="18sp"
@@ -353,6 +318,18 @@
             android:backgroundTint="@color/c_blue"
             android:textColor="@color/c_white"
             android:textSize="18sp"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp" />
+
+        <Button
+            android:id="@+id/btnOpenLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/settings_log_open"
+            android:backgroundTint="@color/c_blue"
+            android:textColor="@color/c_white"
+            android:textSize="16sp"
             android:paddingTop="14dp"
             android:paddingBottom="14dp" />
 

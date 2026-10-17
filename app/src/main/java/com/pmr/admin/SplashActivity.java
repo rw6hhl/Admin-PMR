@@ -10,10 +10,11 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Splash-экран V6.8.
+/* Splash-экран V6.9.
  *
- * Изменения V6.8:
- *   - показывает Call и QTH из настроек.
+ * Изменения V6.9:
+ *   - показывает Call и QTH из настроек;
+ *   - переход сразу на MainActivity (пароль убран).
  */
 public class SplashActivity extends AppCompatActivity {
 
