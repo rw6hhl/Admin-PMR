@@ -5,47 +5,51 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.WindowManager;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран приветствия V2.6.
- * Экран НЕ ГАСНЕТ во время показа (FLAG_KEEP_SCREEN_ON).
- * Показывается 5 секунд, затем передаёт управление.
+/* Splash-экран V6.5.
+ *
+ * Изменения V6.5:
+ *   - показывает Call и QTH из настроек;
+ *   - переход — сразу на PasswordActivity или MainActivity (CheckActivity убран).
  */
 public class SplashActivity extends AppCompatActivity {
-
-    private static final long SPLASH_DELAY_MS = 5000L;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
         setContentView(R.layout.activity_splash);
 
+        SharedPreferences sp = getSharedPreferences(
+                PasswordActivity.PREFS, MODE_PRIVATE);
+
+        TextView versionView = findViewById(R.id.splashVersion);
+        if (versionView != null) {
+            versionView.setText(getString(R.string.app_version));
+        }
+
+        TextView callView = findViewById(R.id.splashCall);
+        if (callView != null) {
+            String call = sp.getString(PasswordActivity.KEY_CALLSIGN,
+                    PasswordActivity.DEFAULT_CALLSIGN);
+            String qth = sp.getString(PasswordActivity.KEY_CITY,
+                    PasswordActivity.DEFAULT_CITY);
+            callView.setText(call + " / " + qth);
+        }
+
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            SharedPreferences sp = getSharedPreferences(
-                    PasswordActivity.PREFS, MODE_PRIVATE);
-
-            boolean checkSystem = sp.getBoolean(
-                    PasswordActivity.KEY_CHECK_SYSTEM, true);
-
+            boolean requirePass = sp.getBoolean(
+                    PasswordActivity.KEY_REQUIRE_PASSWORD, true);
             Intent i;
-            if (checkSystem) {
-                i = new Intent(SplashActivity.this, CheckActivity.class);
+            if (requirePass) {
+                i = new Intent(SplashActivity.this, PasswordActivity.class);
             } else {
-                boolean requirePass = sp.getBoolean(
-                        PasswordActivity.KEY_REQUIRE_PASSWORD, true);
-                if (requirePass) {
-                    i = new Intent(SplashActivity.this, PasswordActivity.class);
-                } else {
-                    i = new Intent(SplashActivity.this, MainActivity.class);
-                }
+                i = new Intent(SplashActivity.this, MainActivity.class);
             }
             startActivity(i);
             finish();
-        }, SPLASH_DELAY_MS);
+        }, 2000);
     }
 }

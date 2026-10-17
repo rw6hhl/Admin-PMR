@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Admin PMR</string>
-    <string name="app_version">V6.4</string>
+    <string name="app_version">V6.6</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -34,16 +34,6 @@
     <string name="settings_port_title">Порт приёма UDP</string>
     <string name="settings_port_hint">5323</string>
 
-    <string name="settings_check_title">Показывать проверку системы при запуске</string>
-
-    <string name="settings_26_title">Подключение 26 Региона к Ростовскому репитеру</string>
-
-    <string name="btn_26_on">ВКЛЮЧЕНО</string>
-    <string name="btn_26_off">ВЫКЛЮЧЕНО</string>
-
-    <string name="settings_log_title">Логи приложения (диагностика)</string>
-    <string name="settings_log_open">ОТКРЫТЬ ЛОГИ</string>
-
     <string name="log_title">ЛОГИ ПРИЛОЖЕНИЯ</string>
     <string name="log_clear">ОЧИСТИТЬ</string>
     <string name="log_save">СОХРАНИТЬ В ФАЙЛ</string>
@@ -63,18 +53,6 @@
     <string name="toast_ban_sent">Бан отправлен b%1$d</string>
     <string name="toast_ban_null">Служба не готова</string>
     <string name="toast_ban_not_running">Сокет не открыт</string>
-    <string name="toast_26_off">260 отправлено (выключить)</string>
-    <string name="toast_26_on">261 отправлено (включить)</string>
-    <string name="toast_26_null">Служба не готова</string>
-
-    <string name="check_title">ПРОВЕРКА СИСТЕМЫ</string>
-    <string name="check_server">Сервер PMR</string>
-    <string name="check_password">Пароль</string>
-    <string name="check_continue">ПРОДОЛЖИТЬ</string>
-    <string name="check_available">ДОСТУПЕН</string>
-    <string name="check_unavailable">НЕДОСТУПЕН</string>
-    <string name="check_on">ВКЛЮЧЁН</string>
-    <string name="check_off">ОТКЛЮЧЁН</string>
 
     <string name="btn_ptt">ПЕРЕДАЧА (PTT)</string>
     <string name="btn_load_list">ЗАГРУЗИТЬ list.txt</string>

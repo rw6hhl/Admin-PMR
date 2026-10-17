@@ -1,6 +1,5 @@
 package com.pmr.admin;
 
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,11 +18,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.File;
 import java.io.InputStream;
 
-/* Экран настроек V5.8.
+/* Экран настроек V6.5.
  *
- * Изменения V5.8:
- *   - возвращён выбор источника списка: «сервер» или «list.txt»;
- *   - ключ KEY_LIST_SOURCE, значения "server" / "local".
+ * Изменения V6.5:
+ *   - убран блок «26 Регион»;
+ *   - убран блок «Открыть логи»;
+ *   - убран блок «Проверка системы».
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -32,9 +32,6 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText passConfirm;
     private EditText refreshInput;
     private CheckBox requirePassBox;
-    private CheckBox checkSystemBox;
-    private Button btn26;
-    private Button btnOpenLog;
     private Button btnLoadList;
     private Button btnUpdateCheck;
 
@@ -69,9 +66,6 @@ public class SettingsActivity extends AppCompatActivity {
         passConfirm = findViewById(R.id.passConfirm);
         refreshInput = findViewById(R.id.refreshInput);
         requirePassBox = findViewById(R.id.requirePassBox);
-        checkSystemBox = findViewById(R.id.checkSystemBox);
-        btn26 = findViewById(R.id.btn26);
-        btnOpenLog = findViewById(R.id.btnOpenLog);
         btnLoadList = findViewById(R.id.btnLoadList);
         btnUpdateCheck = findViewById(R.id.btnUpdateCheck);
 
@@ -93,13 +87,6 @@ public class SettingsActivity extends AppCompatActivity {
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
-
-        if (btn26 != null) btn26.setOnClickListener(v -> toggle26());
-
-        if (btnOpenLog != null) btnOpenLog.setOnClickListener(v -> {
-            Intent i = new Intent(SettingsActivity.this, LogActivity.class);
-            startActivity(i);
-        });
 
         filePicker = registerForActivityResult(
                 new ActivityResultContracts.OpenDocument(),
@@ -169,13 +156,6 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.KEY_REQUIRE_PASSWORD, true);
         if (requirePassBox != null) requirePassBox.setChecked(requirePass);
 
-        boolean checkSystem = sp.getBoolean(
-                PasswordActivity.KEY_CHECK_SYSTEM, true);
-        if (checkSystemBox != null) checkSystemBox.setChecked(checkSystem);
-
-        boolean on26 = sp.getBoolean(PasswordActivity.KEY_26_STATE, false);
-        updateBtn26(on26);
-
         if (regMailIndex != null)
             regMailIndex.setText(sp.getString(
                     PasswordActivity.KEY_MY_MAIL_INDEX,
@@ -220,38 +200,6 @@ public class SettingsActivity extends AppCompatActivity {
             regSpkGain.setText(String.valueOf(sp.getInt(
                     PasswordActivity.KEY_SPK_GAIN,
                     PasswordActivity.DEFAULT_SPK_GAIN)));
-    }
-
-    private void toggle26() {
-        SharedPreferences sp = getSharedPreferences(
-                PasswordActivity.PREFS, MODE_PRIVATE);
-        boolean on26 = sp.getBoolean(PasswordActivity.KEY_26_STATE, false);
-        boolean newState = !on26;
-
-        if (PmrService.pmrSocket == null) {
-            Toast.makeText(this, R.string.toast_26_null,
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
-        PmrService.pmrSocket.send260(newState ? 1 : 0);
-
-        sp.edit().putBoolean(PasswordActivity.KEY_26_STATE, newState).apply();
-        updateBtn26(newState);
-
-        Toast.makeText(this,
-                newState ? R.string.toast_26_on : R.string.toast_26_off,
-                Toast.LENGTH_SHORT).show();
-    }
-
-    private void updateBtn26(boolean on) {
-        if (btn26 == null) return;
-        if (on) {
-            btn26.setText(R.string.btn_26_on);
-            btn26.setBackgroundTintList(getColorStateList(R.color.c_green));
-        } else {
-            btn26.setText(R.string.btn_26_off);
-            btn26.setBackgroundTintList(getColorStateList(R.color.c_red));
-        }
     }
 
     private void saveSettings() {
@@ -310,10 +258,6 @@ public class SettingsActivity extends AppCompatActivity {
         boolean requirePass = requirePassBox != null && requirePassBox.isChecked();
         sp.edit().putBoolean(PasswordActivity.KEY_REQUIRE_PASSWORD,
                 requirePass).apply();
-
-        boolean checkSystem = checkSystemBox != null && checkSystemBox.isChecked();
-        sp.edit().putBoolean(PasswordActivity.KEY_CHECK_SYSTEM,
-                checkSystem).apply();
 
         String myMailIndex = (regMailIndex != null)
                 ? regMailIndex.getText().toString().trim() : "";

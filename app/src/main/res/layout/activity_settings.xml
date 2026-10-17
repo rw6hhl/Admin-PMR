@@ -93,15 +93,6 @@
             android:textSize="16sp"
             android:checked="true" />
 
-        <CheckBox
-            android:id="@+id/checkSystemBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/settings_check_title"
-            android:textSize="16sp"
-            android:checked="true" />
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -371,44 +362,6 @@
             android:backgroundTint="@color/c_blue"
             android:textColor="@color/c_white"
             android:textSize="18sp"
-            android:paddingTop="14dp"
-            android:paddingBottom="14dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/settings_26_title"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btn26"
-            android:layout_width="match_parent"
-            android:layout_height="80dp"
-            android:layout_marginTop="12dp"
-            android:text="@string/btn_26_off"
-            android:textSize="20sp"
-            android:backgroundTint="@color/c_red"
-            android:textColor="@color/c_white" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/settings_log_title"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btnOpenLog"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/settings_log_open"
-            android:backgroundTint="@color/c_blue"
-            android:textColor="@color/c_white"
-            android:textSize="16sp"
             android:paddingTop="14dp"
             android:paddingBottom="14dp" />
 

@@ -11,15 +11,12 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V6.4.
+/* UDP-логика PMR V6.6.
  *
- * Изменения V6.4:
+ * Изменения V6.6:
  *   - IP_SERVER = "185.221.154.39";
- *   - port_prd = 15000;
- *   - Priznak_pmr = 00000, MyMailIndex = 11111, MyPChannel = 4;
- *   - добавлены secret_ext и my_name;
- *   - в timerLoop добавлена отправка TEST_NAME (88) раз в 10 секунд;
- *   - остальная логика как в V6.3.
+ *   - port_prd = 16000;
+ *   - остальная логика как в V6.4.
  */
 public class PmrSocket {
 
@@ -32,7 +29,6 @@ public class PmrSocket {
     public static int MyPChannel  = 4;
     public static int Priznak_pmr = 00000;
 
-    /* Расширенный секрет и имя рации — из C-версии. */
     public static int secret_ext = 21051967;
     public static String my_name = "Admin rabota";
 
@@ -47,7 +43,7 @@ public class PmrSocket {
     private volatile DatagramSocket sock;
     private volatile InetAddress serverAddr;
     private int port_prm = 5323;
-    private int port_prd = 15000;
+    private int port_prd = 16000;
     private int kanal_PRD = 0;
     private int kanal_Secret = 0;
 
@@ -208,8 +204,6 @@ public class PmrSocket {
         try { if (sock != null) sock.close(); } catch (Exception ignored) {}
     }
 
-    /* V6.4: раз в 4 тика — нулевой пакет (признак+секрет).
-     * Раз в 10 тиков — TEST_NAME (88) с именем. */
     private void timerLoop() {
         int cikl_PRD = 0;
         int cikl = 0;
@@ -234,8 +228,6 @@ public class PmrSocket {
             if (cikl_PRD > 9) {
                 cikl_PRD = 0;
                 cikl++;
-
-                /* Раз в 4 тика: нулевой пакет с признаком и секретом. */
                 if (cikl > 3) {
                     byte[] buf = new byte[6];
                     buf[0] = 0;
@@ -248,7 +240,6 @@ public class PmrSocket {
                     cikl = 0;
                 }
 
-                /* V6.4: TEST_NAME (88) раз в 10 тиков — раз в 10 секунд. */
                 if (cikl == 0) {
                     byte[] namePkt = new byte[4 + 2 + my_name.getBytes().length + 1];
                     namePkt[0] = (byte) 88;

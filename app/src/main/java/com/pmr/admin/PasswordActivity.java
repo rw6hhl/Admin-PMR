@@ -10,15 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Admin PMR V6.4.
+/* Экран ввода пароля Admin PMR V6.6.
  *
- * Изменения V6.4:
- *   - пароль по умолчанию: "12345";
+ * Изменения V6.6:
  *   - DEFAULT_IP_SERVER = "185.221.154.39";
- *   - DEFAULT_PORT_PRD = 15000;
- *   - DEFAULT_PRIZNAK_PMR = "00000";
- *   - DEFAULT_MY_MAIL_INDEX = "11111";
- *   - DEFAULT_MY_PCHANNEL = "4".
+ *   - DEFAULT_PORT_PRD = 16000.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -48,14 +44,14 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String DEFAULT_PASSWORD = "12345";
     public static final int    DEFAULT_REFRESH = 2;
     public static final int    DEFAULT_PORT_PRM = 5323;
-    public static final int    DEFAULT_PORT_PRD = 15000;
+    public static final int    DEFAULT_PORT_PRD = 16000;
 
     public static final String DEFAULT_MY_MAIL_INDEX = "11111";
     public static final String DEFAULT_MY_PCHANNEL   = "4";
     public static final String DEFAULT_PRIZNAK_PMR   = "00000";
     public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
     public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
-    public static final String DEFAULT_CALLSIGN      = "RW6HHL";
+    public static final String DEFAULT_CALLSIGN      = "RY6HAA";
     public static final String DEFAULT_CITY          = "Мин-Воды";
 
     public static final String DEFAULT_LIST_SOURCE  = "server";
