@@ -11,12 +11,13 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V6.6.
+/* UDP-логика PMR V7.0.
  *
- * Изменения V6.6:
- *   - IP_SERVER = "185.221.154.39";
- *   - port_prd = 16000;
- *   - остальная логика как в V6.4.
+ * Изменения V7.0:
+ *   - sendRaw → на port_prd + kanal_PRD (16000 + kanal);
+ *   - sendCheck → на PORT_CHECK (16013);
+ *   - sendL → sendCheck;
+ *   - sendBan после cmd=222 шлёт cmd=234 через sendCheck.
  */
 public class PmrSocket {
 
@@ -418,6 +419,7 @@ public class PmrSocket {
         }
     }
 
+    /* V7.0: sendRaw — на port_prd + kanal_PRD. */
     private void sendRaw(byte[] buf) {
         DatagramSocket s = sock;
         InetAddress a1 = serverAddr;
@@ -432,6 +434,21 @@ public class PmrSocket {
         }
     }
 
+    /* V7.0: sendCheck — на PORT_CHECK (16013). */
+    private void sendCheck(byte[] buf) {
+        DatagramSocket s = sock;
+        InetAddress a1 = serverAddr;
+        if (s == null || a1 == null) {
+            AppLog.add("sendCheck: sock или server1 = null");
+            return;
+        }
+        try {
+            s.send(new DatagramPacket(buf, buf.length, a1, PORT_CHECK));
+        } catch (Exception e) {
+            AppLog.add("sendCheck FAIL: " + e);
+        }
+    }
+
     private void sendCmdHeader(int cmd, int kanal, int client) {
         byte[] buf = new byte[4];
         buf[0] = (byte)(cmd & 0xFF);
@@ -441,11 +458,19 @@ public class PmrSocket {
         sendRaw(buf);
     }
 
+    private void sendCmdHeaderCheck(int cmd, int kanal, int client) {
+        byte[] buf = new byte[4];
+        buf[0] = (byte)(cmd & 0xFF);
+        buf[1] = (byte)(kanal & 0xFF);
+        buf[2] = (byte)(client & 0xFF);
+        buf[3] = (byte)((client >> 8) & 0xFF);
+        sendCheck(buf);
+    }
+
     public void sendL() {
         new Thread(() -> {
-            AppLog.addCmd("→", "cmd=234 list kanal=13 port="
-                    + (port_prd + kanal_PRD));
-            sendCmdHeader(234, 13, 0);
+            AppLog.addCmd("→", "cmd=234 list kanal=13 port=" + PORT_CHECK);
+            sendCmdHeaderCheck(234, 13, 0);
         }).start();
     }
 
@@ -459,9 +484,9 @@ public class PmrSocket {
             }
             AppLog.addCmd("→", "cmd=222 ban kanal=13 client=" + client);
             sendCmdHeader(222, 13, client);
-            sendCmdHeader(234, 13, 0);
+            sendCmdHeaderCheck(234, 13, 0);
             try { Thread.sleep(300); } catch (InterruptedException ignored) {}
-            sendCmdHeader(234, 13, 0);
+            sendCmdHeaderCheck(234, 13, 0);
         }).start();
     }
 
